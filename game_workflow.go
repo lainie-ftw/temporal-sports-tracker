@@ -12,6 +12,15 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting Game Workflow", "gameID", game.ID, "homeTeam", game.HomeTeam.DisplayName, "awayTeam", game.AwayTeam.DisplayName)
 
+	// Query handler for UI - return the game info
+	err := workflow.SetQueryHandler(ctx, "gameInfo", func() (Game, error) {
+		return game, nil
+	})
+	if err != nil {
+		logger.Error("Failed to set query handler", "error", err)
+		return "", err
+	}
+
 	//WorkflowRunTimeout: 6 * time.Hour
 
 	// Set up activity options with retry policy

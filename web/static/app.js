@@ -289,9 +289,10 @@ function displayWorkflows(workflows) {
         <div class="workflow-item">
             <div class="workflow-header">
                 <div class="workflow-title">
-                    Game ${workflow.gameId}
                     ${workflow.homeTeam && workflow.awayTeam ? 
-                        `- ${workflow.homeTeam} vs ${workflow.awayTeam}` : ''}
+                        `${workflow.homeTeam} vs ${workflow.awayTeam}` : ''}
+                    ${workflow.startTime ? 
+                    `<div>${new Date(workflow.startTime).toLocaleString()}</div>` : ''}
                 </div>
                 <div class="workflow-status ${workflow.status.toLowerCase()}">
                     ${workflow.status}
@@ -300,8 +301,6 @@ function displayWorkflows(workflows) {
             <div class="workflow-details">
                 <div><strong>Workflow ID:</strong> ${workflow.workflowId}</div>
                 <div><strong>Run ID:</strong> ${workflow.runId}</div>
-                ${workflow.startTime ? 
-                    `<div><strong>Started:</strong> ${new Date(workflow.startTime).toLocaleString()}</div>` : ''}
             </div>
             <div class="workflow-actions">
                 <button class="cancel-btn" onclick="cancelWorkflow('${workflow.workflowId}')">

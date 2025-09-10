@@ -44,24 +44,14 @@ type Conference struct {
 	Name string `json:"name"`
 }
 
-// TeamInfo represents team information for the UI
-//type TeamInfo struct {
-//	ID           string `json:"id"`
-//	Name         string `json:"name"`
-//	DisplayName  string `json:"displayName"`
-//	Abbreviation string `json:"abbreviation"`
-//	ConferenceId string `json:"conferenceId"`
-//}
-
-// WorkflowInfo represents running workflow information
-type WorkflowInfo struct {
+// GameWorkflow represents running workflow information
+type GameWorkflow struct {
 	WorkflowID string    `json:"workflowId"`
 	RunID      string    `json:"runId"`
-	GameID     string    `json:"gameId"`
-	HomeTeam   string    `json:"homeTeam"`
-	AwayTeam   string    `json:"awayTeam"`
 	Status     string    `json:"status"`
-	StartTime  time.Time `json:"startTime"`
+	HomeTeam  string    `json:"homeTeam"`
+	AwayTeam  string    `json:"awayTeam"`
+	StartTime time.Time `json:"startTime"`
 }
 
 // GetSports returns available sports from ESPN API
@@ -293,13 +283,13 @@ func (h *Handlers) GetWorkflows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var workflows []WorkflowInfo
+	var gameWorkflows []GameWorkflow
 
 	// Check if Temporal client is available
 	if h.temporalClient == nil {
 		// Return empty list in demo mode
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(workflows)
+		json.NewEncoder(w).Encode(gameWorkflows)
 		return
 	}
 
@@ -314,38 +304,37 @@ func (h *Handlers) GetWorkflows(w http.ResponseWriter, r *http.Request) {
 		// Log error but don't fail the request - return empty list
 		fmt.Printf("Failed to list workflows: %v\n", err)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(workflows)
+		json.NewEncoder(w).Encode(gameWorkflows)
 		return
 	}
 
 	// Process the workflow executions
 	for _, execution := range resp.Executions {
-		// Extract game ID from workflow ID (format: game-{gameID})
-		gameID := strings.TrimPrefix(execution.Execution.WorkflowId, "game-")
-		
-		// Convert start time
-		startTime := time.Time{}
-		if execution.StartTime != nil {
-			startTime = execution.StartTime.AsTime()
-		}
-
-		// Try to get additional game information by querying the workflow
-		// For now, we'll use basic information from the workflow execution
-		workflow := WorkflowInfo{
+		workflow := GameWorkflow{
 			WorkflowID: execution.Execution.WorkflowId,
 			RunID:      execution.Execution.RunId,
-			GameID:     gameID,
 			Status:     execution.Status.String(),
-			StartTime:  startTime,
-			// HomeTeam and AwayTeam would need to be fetched from workflow state
-			// This could be done via workflow queries if implemented in GameWorkflow
 		}
 
-		workflows = append(workflows, workflow)
+		// Get the info about the game from the gameInfo query in GameWorkflow
+		var gameInfo sports.Game
+		gameInfoResult, err := h.temporalClient.QueryWorkflow(context.Background(), workflow.WorkflowID, workflow.RunID, "gameInfo")
+		if err != nil {
+			fmt.Printf("Failed to query workflow %s: %v\n", workflow.WorkflowID, err)
+		}
+		err = gameInfoResult.Get(&gameInfo)
+		if err != nil {
+			fmt.Printf("Failed to get query result for workflow %s: %v\n", workflow.WorkflowID, err)
+		}
+		workflow.HomeTeam = gameInfo.HomeTeam.DisplayName
+		workflow.AwayTeam = gameInfo.AwayTeam.DisplayName
+		workflow.StartTime = gameInfo.StartTime
+
+		gameWorkflows = append(gameWorkflows, workflow)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(workflows)
+	json.NewEncoder(w).Encode(gameWorkflows)
 }
 
 // ManageWorkflow handles workflow management (cancel, etc.)
