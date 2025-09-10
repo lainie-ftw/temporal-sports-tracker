@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Sports Tracker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏈 Temporal Sports Tracker</h1>
+            <p>Track your favorite teams and get real-time score updates</p>
+        </header>
+
+        <main>
+            <!-- Team/Conference Selection Section -->
+            <section id="selection-section" class="card">
+                <h2>Start Tracking</h2>
+                <form id="tracking-form">
+                    <div class="form-group">
+                        <label for="sport-select">Sport:</label>
+                        <select id="sport-select" required>
+                            <option value="">Select a sport...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="league-select">League:</label>
+                        <select id="league-select" required disabled>
+                            <option value="">Select a league...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Track by:</label>
+                        <div class="radio-group">
+                            <label>
+                                <input type="radio" name="track-type" value="teams" checked>
+                                Specific Teams
+                            </label>
+                            <label>
+                                <input type="radio" name="track-type" value="conferences">
+                                Conferences
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="teams-group">
+                        <label for="teams-select">Teams:</label>
+                        <select id="teams-select" multiple disabled>
+                            <option value="">Loading teams...</option>
+                        </select>
+                        <small>Hold Ctrl/Cmd to select multiple teams</small>
+                    </div>
+
+                    <div class="form-group" id="conferences-group" style="display: none;">
+                        <label for="conferences-select">Conferences:</label>
+                        <select id="conferences-select" multiple disabled>
+                            <option value="">Loading conferences...</option>
+                        </select>
+                        <small>Hold Ctrl/Cmd to select multiple conferences</small>
+                    </div>
+
+                    <button type="submit" id="start-tracking-btn" disabled>
+                        Start Tracking
+                    </button>
+                </form>
+            </section>
+
+            <!-- Running Workflows Section -->
+            <section id="workflows-section" class="card">
+                <h2>Active Game Workflows</h2>
+                <div class="workflows-header">
+                    <button id="refresh-workflows-btn">🔄 Refresh</button>
+                    <span id="workflows-count">0 active workflows</span>
+                </div>
+                <div id="workflows-list">
+                    <div class="no-workflows">
+                        <p>No active game workflows found.</p>
+                        <p>Start tracking some teams to see workflows here!</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Status Messages -->
+        <div id="status-message" class="status-message"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

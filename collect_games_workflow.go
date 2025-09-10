@@ -9,7 +9,7 @@ import (
 
 // CollectGamesWorkflow runs weekly to collect all games based on input and schedule each game as a GameWorkflow
 	//TODO: allow scheduling by team, teams, conference, or conferences, and get rid of duplicates (i.e., send Big10 and U of M, only make 1 U of M workflow)
-func CollectGamesWorkflow(ctx workflow.Context) error {
+func CollectGamesWorkflow(ctx workflow.Context, trackingRequest TrackingRequest) error {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting Collect Games Workflow.")
 
@@ -25,10 +25,9 @@ func CollectGamesWorkflow(ctx workflow.Context) error {
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
-
 	// Fetch games from ESPN API
 	var games []Game
-	err := workflow.ExecuteActivity(ctx, GetGamesInConference).Get(ctx, &games)
+	err := workflow.ExecuteActivity(ctx, GetGames, trackingRequest).Get(ctx, &games)
 	if err != nil {
 		logger.Error("Failed to fetch games", "error", err)
 		return err

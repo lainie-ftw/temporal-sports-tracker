@@ -38,11 +38,12 @@ func StartGameWorkflow(ctx context.Context, game Game) error {
 }
 
 // Get games by conference identifier from the ESPN API
-func GetGamesInConference(ctx context.Context) ([]Game, error) {
+func GetGames(ctx context.Context, trackingRequest TrackingRequest) ([]Game, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Fetching games from ESPN API")
 
-	url := "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
+	// Use the trackingRequest (sport and league) to build the URL
+	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/%s/%s/scoreboard", trackingRequest.Sport, trackingRequest.League)
 
 	resp, err := http.Get(url)
 	if err != nil {

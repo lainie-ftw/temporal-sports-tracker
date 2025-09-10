@@ -105,3 +105,11 @@ type ScoreUpdate struct {
 	AwayScore   string
 	Timestamp   time.Time
 }
+
+// TrackingRequest represents the request to start tracking
+type TrackingRequest struct {
+	Sport       string   `json:"sport"`
+	League      string   `json:"league"`
+	Teams       []string `json:"teams"`
+	Conferences []string `json:"conferences"`
+}

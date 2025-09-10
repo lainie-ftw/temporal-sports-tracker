@@ -24,7 +24,7 @@ func main() {
 	w.RegisterWorkflow(sports.GameWorkflow)
 
 	// Register activities
-	w.RegisterActivity(sports.GetGamesInConference)
+	w.RegisterActivity(sports.GetGames)
 	w.RegisterActivity(sports.StartGameWorkflow)
 	w.RegisterActivity(sports.GetGameScore)
 	w.RegisterActivity(sports.SendNotification)
