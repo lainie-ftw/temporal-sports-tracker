@@ -250,6 +250,32 @@ button:disabled {
     background: #c82333;
 }
 
+.temporal-btn {
+    background: #ffffff;
+    color: #333;
+    border: 2px solid #e1e5e9;
+    padding: 8px 16px 8px 40px;
+    font-size: 14px;
+    position: relative;
+    background-image: url('temporal_logo.png');
+    background-repeat: no-repeat;
+    background-position: 8px center;
+    background-size: 20px 20px;
+    transition: all 0.3s ease;
+}
+
+.temporal-btn:hover {
+    background-color: #f8f9fa;
+    border-color: #667eea;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.temporal-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .no-workflows {
     text-align: center;
     padding: 40px 20px;

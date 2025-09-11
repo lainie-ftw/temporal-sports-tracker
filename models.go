@@ -87,12 +87,12 @@ type TeamOdds struct {
 // Game represents a simplified game structure for our workflow
 type Game struct {
 	ID           string
-	EventID      string
 	HomeTeam     Team
 	AwayTeam     Team
 	StartTime    time.Time
 	CurrentScore map[string]string // team ID -> score
 	Status       string
+	APIRoot      string // Base URL for the sport/league, e.g. "https://site.api.espn.com/apis/site/v2/sports/football/college-football"
 	Odds         string
 }
 

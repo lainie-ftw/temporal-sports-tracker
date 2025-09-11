@@ -112,6 +112,7 @@ The system logs:
 - Multiple notification channels (email, SMS, etc.)
 - Dashboard for game monitoring
 - Historical score tracking
+- Support for all teams using the /team API (instead of /scoreboard, which only has the top 25)
 
 ## Dependencies
 

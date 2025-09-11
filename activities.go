@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
@@ -16,6 +17,8 @@ func StartGameWorkflow(ctx context.Context, game Game) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Starting a game workflow with game ID ", "gameID", game.ID)
 
+	// We don't need to worry about duplicate "games" being created because we're using the game ID - if we try to start a second workflow with the same
+	// game ID -> workflow ID, the default of the Go SDK is to just return the run ID of the already running workflow. Other SDKs will have different defaults!
 	var workflowID = "game-" + game.ID
 
 	options := client.StartWorkflowOptions{
@@ -28,7 +31,7 @@ func StartGameWorkflow(ctx context.Context, game Game) error {
 	}
 	defer c.Close()
 
-	// Start the workflow
+	// Start the workflow with the Game object sent in
 	we, err := c.ExecuteWorkflow(context.Background(), options, GameWorkflow, game)
 	if err != nil {
 		return fmt.Errorf("unable to execute workflow: %w", err)
@@ -43,90 +46,133 @@ func GetGames(ctx context.Context, trackingRequest TrackingRequest) ([]Game, err
 	logger.Info("Fetching games from ESPN API")
 
 	// Use the trackingRequest (sport and league) to build the URL
-	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/%s/%s/scoreboard", trackingRequest.Sport, trackingRequest.League)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch games: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	var espnResp ESPNResponse
-	if err := json.Unmarshal(body, &espnResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ESPN response: %w", err)
-	}
+	var apiRoot string = fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/%s/%s", trackingRequest.Sport, trackingRequest.League)
+	scoreboardUrl := apiRoot + "/scoreboard" //If you don't specify a conference, it will give you the top 25 games across all conferences
 
 	var games []Game
-	bigTenConferenceID := "5" // Big Ten conference ID
 
-	for _, event := range espnResp.Events {
-		logger.Info("Processing event", "name", event.Name)
-	//	for _, event := range league.Events {
-			// Filter for Big Ten games
+	// if trackingRequest.Conferences is not empty, hit API for each conference and combine results
+	if len(trackingRequest.Conferences) > 0 {
+		for _, conf := range trackingRequest.Conferences {
+			url := fmt.Sprintf("%s/scoreboard?groups=%s", apiRoot, conf)
+			resp, err := http.Get(url)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch games: %w", err)
+			}
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read response body: %w", err)
+			}
+
+			var espnResp ESPNResponse
+			if err := json.Unmarshal(body, &espnResp); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal ESPN response: %w", err)
+			}
+
+			// Process every game in this conference
+			for _, event := range espnResp.Events {
+				logger.Info("Processing event", "name", event.Name)
+				if len(event.Competitions) > 0 && len(event.Competitions[0].Competitors) >= 2 {
+					comp := event.Competitions[0]
+
+					homeTeam := comp.Competitors[0]
+					awayTeam := comp.Competitors[1]
+					logger.Info("Home Team name", "name", homeTeam.Team.Name)
+					logger.Info("Away Team name", "name", awayTeam.Team.Name)
+
+					game := BuildGame(comp, homeTeam, awayTeam, apiRoot)
+					games = append(games, game)
+				}
+			}
+		}
+	}
+	
+	// if trackingRequest.Teams is not empty, hit the general scoreboard and filter results for those teams
+	if len(trackingRequest.Teams) > 0 {
+		resp, err := http.Get(scoreboardUrl)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch games: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", err)
+		}
+
+		var espnResp ESPNResponse
+		if err := json.Unmarshal(body, &espnResp); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal ESPN response: %w", err)
+		}
+
+		for _, event := range espnResp.Events {
+			logger.Info("Processing event", "name", event.Name)
 			if len(event.Competitions) > 0 && len(event.Competitions[0].Competitors) >= 2 {
 				comp := event.Competitions[0]
 
-				// Check if either team is in the conference
 				homeTeam := comp.Competitors[0]
 				awayTeam := comp.Competitors[1]
 				logger.Info("Home Team name", "name", homeTeam.Team.Name)
 				logger.Info("Away Team name", "name", awayTeam.Team.Name)
 
-				if homeTeam.Team.ConferenceId == bigTenConferenceID ||
-				   awayTeam.Team.ConferenceId == bigTenConferenceID {
-
-					//odds = ProcessOdds(comp.Odds)
-					game := Game{
-						ID:        comp.ID,
-						EventID:   event.ID,
-						StartTime: comp.Date.Time,
-						Status:    comp.Status.Type.State,
-						CurrentScore: make(map[string]string),
-					}
-
-					// Determine home and away teams
-					if homeTeam.HomeAway == "home" {
-						game.HomeTeam = homeTeam.Team
-						game.AwayTeam = awayTeam.Team
-						game.CurrentScore[homeTeam.Team.ID] = homeTeam.Score
-						game.CurrentScore[awayTeam.Team.ID] = awayTeam.Score
-					} else {
-						game.HomeTeam = awayTeam.Team
-						game.AwayTeam = homeTeam.Team
-						game.CurrentScore[awayTeam.Team.ID] = awayTeam.Score
-						game.CurrentScore[homeTeam.Team.ID] = homeTeam.Score
-					}
-
-					// Set favorite and underdog based on odds
-					if len(comp.Odds) > 0 {
-						game.Odds = comp.Odds[0].Details
-						game.HomeTeam.Favorite = comp.Odds[0].HomeTeamOdds.Favorite
-						game.HomeTeam.Underdog = comp.Odds[0].HomeTeamOdds.Underdog
-						game.AwayTeam.Favorite = comp.Odds[0].AwayTeamOdds.Favorite
-						game.AwayTeam.Underdog = comp.Odds[0].AwayTeamOdds.Underdog
-					}
+				// Filter games by teams in the request
+				if slices.Contains(trackingRequest.Teams, homeTeam.Team.ID) ||
+					slices.Contains(trackingRequest.Teams, awayTeam.Team.ID) {
+					game := BuildGame(comp, homeTeam, awayTeam, apiRoot)
 					games = append(games, game)
 				}
 			}
-	//	}
+		}
 	}
 
 	logger.Info("Fetched games", "count", len(games))
 	return games, nil
 }
 
+// Helper function to create a Game from a Competition and its Competitors
+func BuildGame(comp Competition, homeTeam, awayTeam Competitor, apiRoot string) Game {
+	game := Game{
+		ID:        comp.ID,
+		StartTime: comp.Date.Time,
+		Status:    comp.Status.Type.State,
+		APIRoot: apiRoot,
+		CurrentScore: make(map[string]string),
+	}
+
+	// Determine home and away teams
+	if homeTeam.HomeAway == "home" {
+		game.HomeTeam = homeTeam.Team
+		game.AwayTeam = awayTeam.Team
+		game.CurrentScore[homeTeam.Team.ID] = homeTeam.Score
+		game.CurrentScore[awayTeam.Team.ID] = awayTeam.Score
+	} else {
+		game.HomeTeam = awayTeam.Team
+		game.AwayTeam = homeTeam.Team
+		game.CurrentScore[awayTeam.Team.ID] = awayTeam.Score
+		game.CurrentScore[homeTeam.Team.ID] = homeTeam.Score
+	}
+
+	// Set favorite and underdog based on odds
+	if len(comp.Odds) > 0 {
+		game.Odds = comp.Odds[0].Details
+		game.HomeTeam.Favorite = comp.Odds[0].HomeTeamOdds.Favorite
+		game.HomeTeam.Underdog = comp.Odds[0].HomeTeamOdds.Underdog
+		game.AwayTeam.Favorite = comp.Odds[0].AwayTeamOdds.Favorite
+		game.AwayTeam.Underdog = comp.Odds[0].AwayTeamOdds.Underdog
+	}
+	return game
+}
+
 // FetchGameScoreActivity fetches current score for a specific game
-func GetGameScore(ctx context.Context, gameID string) (map[string]string, error) {
+func GetGameScore(ctx context.Context, game Game) (map[string]string, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("Fetching game score", "gameID", gameID)
+	logger.Info("Fetching game score", "gameID", game.ID)
 
-	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard")
-
+	url := game.APIRoot + "/scoreboard"
+//	url := fmt.Sprintf("%s/summary?event=%s", game.APIRoot, game.ID) //Example: https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=:gameId
+	
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch game score: %w", err)
@@ -145,21 +191,19 @@ func GetGameScore(ctx context.Context, gameID string) (map[string]string, error)
 
 	// Find the specific game
 	for _, event := range espnResp.Events {
-	//	for _, event := range league.Events {
-			if len(event.Competitions) > 0 && event.Competitions[0].ID == gameID {
-				comp := event.Competitions[0]
-				scores := make(map[string]string)
+		if len(event.Competitions) > 0 && event.Competitions[0].ID == game.ID {
+			comp := event.Competitions[0]
+			scores := make(map[string]string)
 
-				for _, competitor := range comp.Competitors {
-					scores[competitor.Team.ID] = competitor.Score
-				}
-
-				return scores, nil
+			for _, competitor := range comp.Competitors {
+				scores[competitor.Team.ID] = competitor.Score
 			}
-		//}
+
+			return scores, nil
+		}
 	}
 
-	return nil, fmt.Errorf("game not found: %s", gameID)
+	return nil, fmt.Errorf("game not found: %s", game.ID)
 }
 
 func SendNotification(ctx context.Context, update ScoreUpdate) error {

@@ -202,22 +202,15 @@ async function handleTrackingSubmit(e) {
     }
 }
 
-// Cancel workflow
-async function cancelWorkflow(workflowId) {
-    if (!confirm('Are you sure you want to cancel this workflow?')) {
-        return;
-    }
-    
-    try {
-        await apiCall(`/api/workflows/${workflowId}`, {
-            method: 'DELETE'
-        });
-        
-        showStatus('Workflow cancelled successfully', 'success');
-        loadWorkflows(); // Refresh the list
-    } catch (error) {
-        showStatus('Failed to cancel workflow', 'error');
-    }
+// View workflow in Temporal UI
+function viewWorkflow(workflowId, runId) {
+    const temporalUrl = `http://localhost:8233/namespaces/default/workflows/${workflowId}/${runId}/history`;
+    window.open(temporalUrl, '_blank');
+}
+
+function viewGame(apiRoot, gameId) {
+    const gameUrl = ` https://www.espn.com/college-football/game/_/gameId/${gameId}`;
+    window.open(gameUrl, '_blank');
 }
 
 // Helper functions
@@ -303,9 +296,13 @@ function displayWorkflows(workflows) {
                 <div><strong>Run ID:</strong> ${workflow.runId}</div>
             </div>
             <div class="workflow-actions">
-                <button class="cancel-btn" onclick="cancelWorkflow('${workflow.workflowId}')">
-                    Cancel Workflow
+                <button class="temporal-btn" onclick="viewWorkflow('${workflow.workflowId}', '${workflow.runId}')" alt="View Workflow in Temporal UI">
+                &nbsp;&nbsp;&nbsp;
                 </button>
+                <button onclick="viewGame('${workflow.gameId}', '${workflow.gameId}')" alt="View Game Info on ESPN">
+                View Game Info at ESPN.com
+                </button>
+                                
             </div>
         </div>
     `).join('');

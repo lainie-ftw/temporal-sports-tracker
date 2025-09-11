@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	sports "temporal-sports-tracker"
 	"time"
@@ -52,6 +53,7 @@ type GameWorkflow struct {
 	HomeTeam  string    `json:"homeTeam"`
 	AwayTeam  string    `json:"awayTeam"`
 	StartTime time.Time `json:"startTime"`
+	GameID   string    `json:"gameId"`
 }
 
 // GetSports returns available sports from ESPN API
@@ -63,9 +65,9 @@ func (h *Handlers) GetSports(w http.ResponseWriter, r *http.Request) {
 
 	// Predefined list of supported ESPN sports
 	sports := []Sport{
-		{ID: "football", Name: "Football", Path: "football"},
-		{ID: "basketball", Name: "Basketball", Path: "basketball"},
 		{ID: "baseball", Name: "Baseball", Path: "baseball"},
+		{ID: "basketball", Name: "Basketball", Path: "basketball"},
+		{ID: "football", Name: "Football", Path: "football"},
 		{ID: "hockey", Name: "Hockey", Path: "hockey"},
 		{ID: "soccer", Name: "Soccer", Path: "soccer"},
 	}
@@ -180,7 +182,11 @@ func (h *Handlers) GetTeams(w http.ResponseWriter, r *http.Request) {
 	for _, team := range teamMap {
 		teams = append(teams, team)
 	}
-	//TODO: sort teams alphabetically by DisplayName
+	
+	// Sort teams alphabetically by DisplayName
+	sort.Slice(teams, func(i, j int) bool {
+		return teams[i].DisplayName < teams[j].DisplayName
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(teams)
@@ -203,18 +209,29 @@ func (h *Handlers) GetConferences(w http.ResponseWriter, r *http.Request) {
 
 	// For now, return predefined conferences for college sports
 	var conferences []Conference
-	if league == "college-football" || league == "mens-college-basketball" || league == "womens-college-basketball" {
+	if league == "college-football" {
 		conferences = []Conference{
+			{ID: "5", Name: "Big Ten"},
+			{ID: "8", Name: "SEC"},
 			{ID: "1", Name: "ACC"},
 			{ID: "4", Name: "Big 12"},
-			{ID: "5", Name: "Big Ten"},
-			{ID: "8", Name: "Pac-12"},
-			{ID: "9", Name: "SEC"},
-			{ID: "15", Name: "American Athletic"},
-			{ID: "17", Name: "Conference USA"},
-			{ID: "18", Name: "Mid-American"},
-			{ID: "19", Name: "Mountain West"},
+			{ID: "151", Name: "American"}, 
+			{ID: "15", Name: "MAC"}, 
+			{ID: "17", Name: "Mountain West"},
 			{ID: "20", Name: "Sun Belt"},
+		}
+	}
+
+	if league == "mens-college-basketball" || league == "womens-college-basketball" {
+		conferences = []Conference{
+			{ID: "7", Name: "Big Ten"},
+			{ID: "23", Name: "SEC"},
+			{ID: "2", Name: "ACC"},
+			{ID: "7", Name: "Big 12"},
+			{ID: "62", Name: "American"}, 
+			{ID: "14", Name: "MAC"}, 
+			{ID: "44", Name: "Mountain West"},
+			{ID: "27", Name: "Sun Belt"},
 		}
 	}
 
@@ -329,9 +346,15 @@ func (h *Handlers) GetWorkflows(w http.ResponseWriter, r *http.Request) {
 		workflow.HomeTeam = gameInfo.HomeTeam.DisplayName
 		workflow.AwayTeam = gameInfo.AwayTeam.DisplayName
 		workflow.StartTime = gameInfo.StartTime
+		workflow.GameID = gameInfo.ID
 
 		gameWorkflows = append(gameWorkflows, workflow)
 	}
+
+	// Sort workflows by StartTime
+	sort.Slice(gameWorkflows, func(i, j int) bool {
+		return gameWorkflows[i].StartTime.Before(gameWorkflows[j].StartTime)
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(gameWorkflows)
