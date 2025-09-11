@@ -2,6 +2,8 @@ package sports
 
 import "time"
 
+const TaskQueueName = "sports-tracker-task-queue"
+
 // ESPN API Response Models
 type ESPNResponse struct {
 	Events  []Event  `json:"events"`
