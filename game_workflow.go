@@ -58,9 +58,9 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 	}
 
 	// Monitor game every minute using a loop with timers
-	for workflow.Now(ctx).Before(game.StartTime.Add(4 * time.Hour)) {
+	for workflow.Now(ctx).Before(game.StartTime.Add(5 * time.Hour)) {
 		// Wait 1 minute before next poll
-		timer := workflow.NewTimer(ctx, 1*time.Minute)
+		timer := workflow.NewTimer(ctx, 5*time.Minute)
 		selector := workflow.NewSelector(ctx)
 		selector.AddFuture(timer, func(f workflow.Future) {
 			// Timer fired, time to poll again
@@ -69,7 +69,7 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 		// Fetch current scores
 		var currentScores map[string]string
-		err := workflow.ExecuteActivity(ctx, GetGameScore, game.ID).Get(ctx, &currentScores)
+		err := workflow.ExecuteActivity(ctx, GetGameScore, game).Get(ctx, &currentScores)
 		if err != nil {
 			logger.Error("Failed to fetch game score", "gameID", game.ID, "error", err)
 			continue

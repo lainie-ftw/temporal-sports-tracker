@@ -2,6 +2,22 @@
 
 A Temporal workflow system that monitors Big Ten college football games and sends Slack notifications when scores change.
 
+## To Do
+- Test game workflow while games are happening
+- Add real notifications 
+- (?) Add updates pushed to UI with scores
+- Figure out how to deploy to k8s
+-- Build and deploy pipeline, probably via GH actions
+-- SA account access
+- Add SDK metrics
+- Add SDK metrics to a dashboard
+-- https://github.com/temporalio/dashboards/tree/master/sdk
+-- https://community.temporal.io/t/sdk-metrics-in-go/8564/3 
+-- https://github.com/temporalio/samples-go/tree/main/metrics
+-- https://docs.temporal.io/cloud/metrics/prometheus-grafana#grafana-data-sources-configuration
+- Add cloud metrics v2 to a dashboard
+- Update this README to be accurate after all the changes...
+
 ## Features
 
 - **Weekly Game Polling**: Automatically fetches upcoming Big Ten games from ESPN API every week
@@ -48,7 +64,7 @@ A Temporal workflow system that monitors Big Ten college football games and send
 ## Configuration
 
 The system is configured to:
-- Monitor Big Ten conference games (conference ID: 5)
+- Monitor games as selected in the UI (by conference or team name)
 - Poll games every minute during active play
 - Use Temporal's built-in retry policies for resilience
 - Send mock Slack notifications (update `SendSlackNotificationActivity` for real Slack integration)
@@ -68,16 +84,12 @@ The system is configured to:
 
 ## Testing
 
-The `test.go` file includes functions to:
-- Test fetching games from ESPN API
-- Test the mock Slack notification system
-- Start the weekly poller workflow
+- TODO: add this info
 
 ## ESPN API
 
 The system uses the ESPN College Football API:
 - Endpoint: `https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard`
-- Filters for Big Ten conference games (conference ID: 5)
 - Parses game data including teams, scores, and start times
 
 ## Slack Integration
@@ -87,13 +99,6 @@ Currently mocked in `SendSlackNotificationActivity`. To enable real Slack notifi
 1. Get a Slack webhook URL from your Slack app
 2. Update the `SendSlackNotificationActivity` function to use HTTP POST to the webhook
 3. Add proper error handling and authentication
-
-## Error Handling
-
-- **Activity Retries**: Uses Temporal's built-in retry policies with exponential backoff
-- **Network Failures**: Automatic retries for API calls
-- **Workflow Resilience**: Workflows continue running even if individual activities fail
-- **Timeout Handling**: Activities have configurable timeouts
 
 ## Monitoring
 

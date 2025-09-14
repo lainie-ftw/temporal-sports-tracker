@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-sports-tracker-config
+  namespace: default
+data:
+  # Temporal server configuration
+  TEMPORAL_HOST: "temporal-frontend.temporal-system.svc.cluster.local:7233"
+  TEMPORAL_NAMESPACE: "default"
+  
+  # Application configuration
+  PORT: "8080"
+  LOG_LEVEL: "info"
+  
+  # Task queue name (should match your Go code)
+  TASK_QUEUE: "sports-tracker-task-queue"

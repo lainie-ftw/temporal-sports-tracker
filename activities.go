@@ -40,7 +40,7 @@ func StartGameWorkflow(ctx context.Context, game Game) error {
 	return nil
 }
 
-// Get games by conference identifier from the ESPN API
+// Get games based on user input from the ESPN API
 func GetGames(ctx context.Context, trackingRequest TrackingRequest) ([]Game, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Fetching games from ESPN API")
