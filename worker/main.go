@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Create Temporal client
-	c, err := client.Dial(client.Options{})
+	c, err := client.Dial(sports.GetClientOptions())
 	if err != nil {
 		log.Fatalln("Unable to create Temporal client", err)
 	}

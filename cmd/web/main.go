@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	sports "temporal-sports-tracker"
 	"temporal-sports-tracker/web"
 
 	"go.temporal.io/sdk/client"
@@ -14,7 +15,7 @@ func main() {
 	var temporalClient client.Client
 	var err error
 	
-	temporalClient, err = client.Dial(client.Options{})
+	temporalClient, err = client.Dial(sports.GetClientOptions())
 	if err != nil {
 		log.Printf("Warning: Unable to create Temporal client: %v", err)
 		log.Printf("The UI will work but workflow operations will be limited")

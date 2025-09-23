@@ -25,7 +25,7 @@ func StartGameWorkflow(ctx context.Context, game Game) error {
 		ID:        workflowID,
 		TaskQueue: TaskQueueName,
 	}
-	c, err := client.Dial(client.Options{})
+	c, err := client.Dial(GetClientOptions())
 	if err != nil {
 		return fmt.Errorf("unable to create Temporal client: %w", err)
 	}
@@ -208,6 +208,29 @@ func GetGameScore(ctx context.Context, game Game) (map[string]string, error) {
 
 func SendNotification(ctx context.Context, update ScoreUpdate) error {
 	return SendSlackNotificationActivity(ctx, update)
+}
+
+func SendHomeAssistantNotificationActivity(ctx context.Context, update ScoreUpdate) error {
+	logger := activity.GetLogger(ctx)
+
+	message := fmt.Sprintf("🏈 Score Update!\n%s vs %s\nScore: %s - %s\nTime: %s",
+		update.HomeTeam, update.AwayTeam, update.HomeScore, update.AwayScore,
+		update.Timestamp.Format("2006-01-02 15:04:05"))
+
+	//TODO: add underdog team name, TVNetwork, Quarter, RemainingTime
+	//title := "[update.conference] [update.sport]: Team Chaos!"
+		//	message := [update.UnderdogTeam] is winning in the [update.HomeTeam] vs. [update.AwayTeam] game on [update.TVNetwork]! It's currently Q[update.Quarter] with [update.RemainingTime] left.
+//	Score: [update.HomeTeam] [update.HomeScore] - [update.AwayTeam] [update.AwayScore]
+
+	logger.Info("HASS notification (mocked)", "message", message)
+	//jsonScoreUpdate := map[string]string{
+	//	"message": message,
+	//}	
+	//jsonData, err := json.Marshal(jsonScoreUpdate)
+	//http.Post("https://your-home-assistant:8123/api/webhook/some_hook_id", "application/json", body io.Reader??)
+	// curl -X POST -H "Content-Type: application/json" -d '{ "message": "message", "title": "title" }' HASS_WEBHOOK_URL 
+
+	return nil
 }
 
 // SendSlackNotificationActivity sends a notification to Slack (mocked)

@@ -3,6 +3,8 @@ package sports
 import "time"
 
 const TaskQueueName = "sports-tracker-task-queue"
+const TemporalAddress="us-west-2.aws.api.temporal.io:7233"
+const TemporalNamespace="laine.sdvdw"
 
 // ESPN API Response Models
 type ESPNResponse struct {
@@ -105,6 +107,10 @@ type ScoreUpdate struct {
 	AwayTeam    string
 	HomeScore   string
 	AwayScore   string
+	UnderdogTeam string
+	TVNetwork  	string
+	Quarter	    string
+	RemainingTime string
 	Timestamp   time.Time
 }
 

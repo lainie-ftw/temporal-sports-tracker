@@ -1,0 +1,54 @@
+package sports
+
+import (
+	"context"
+	"crypto/tls"
+	"log/slog"
+	"os"
+
+	"go.temporal.io/sdk/client"
+	tlog "go.temporal.io/sdk/log"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+)
+
+func GetClientOptions() client.Options {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
+	clientOptions := client.Options{
+		HostPort:  TemporalAddress,
+		Namespace: TemporalNamespace,
+		Logger:    tlog.NewStructuredLogger(logger),
+	}
+
+	clientOptions.ConnectionOptions = client.ConnectionOptions{
+		TLS: &tls.Config{},
+		DialOptions: []grpc.DialOption{
+			grpc.WithUnaryInterceptor(
+				func(ctx context.Context, method string, req any, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+					return invoker(
+						metadata.AppendToOutgoingContext(ctx, "temporal-namespace", TemporalNamespace),
+						method,
+						req,
+						reply,
+						cc,
+						opts...,
+					)
+				},
+			),
+		},
+	}
+
+	TemporalAPIKey := os.Getenv("TEMPORAL_API_KEY")
+	if TemporalAPIKey == "" {
+		slog.Error("TEMPORAL_API_KEY environment variable is not set")
+		os.Exit(1)
+	}
+
+	clientOptions.Credentials = client.NewAPIKeyStaticCredentials(TemporalAPIKey)
+
+	return clientOptions
+}

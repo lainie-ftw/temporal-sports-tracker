@@ -21,8 +21,6 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 		return "", err
 	}
 
-	//WorkflowRunTimeout: 6 * time.Hour
-
 	// Set up activity options with retry policy
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
@@ -57,9 +55,9 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 		lastScores[teamID] = score
 	}
 
-	// Monitor game every minute using a loop with timers
+	// Monitor the game for 5 hours after start time - could be modified to check for the game status instead
 	for workflow.Now(ctx).Before(game.StartTime.Add(5 * time.Hour)) {
-		// Wait 1 minute before next poll
+		// Wait 5 minutes before next poll
 		timer := workflow.NewTimer(ctx, 5*time.Minute)
 		selector := workflow.NewSelector(ctx)
 		selector.AddFuture(timer, func(f workflow.Future) {
@@ -99,7 +97,7 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 			err = workflow.ExecuteActivity(ctx, SendNotification, update).Get(ctx, nil)
 			if err != nil {
-				logger.Error("Failed to send Slack notification", "gameID", game.ID, "error", err)
+				logger.Error("Failed to send notification", "gameID", game.ID, "error", err)
 			}
 
 			// Update last scores
