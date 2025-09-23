@@ -204,7 +204,7 @@ async function handleTrackingSubmit(e) {
 
 // View workflow in Temporal UI
 function viewWorkflow(workflowId, runId) {
-    const temporalUrl = `http://localhost:8233/namespaces/default/workflows/${workflowId}/${runId}/history`;
+    const temporalUrl = `https://cloud.temporal.io/namespaces/laine.sdvdw/workflows/${workflowId}/${runId}/history`;
     window.open(temporalUrl, '_blank');
 }
 

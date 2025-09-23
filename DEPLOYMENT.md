@@ -15,6 +15,7 @@ Both components connect to a Temporal server and can be scaled independently.
 
 1. **AWS CLI** configured with appropriate permissions
 2. **kubectl** configured to connect to your EKS cluster
+3. `temporal-sports-tracker` namespace in your EKS cluster
 3. **Docker** installed for building images
 4. **ECR repositories** created for both images:
    - `your-account.dkr.ecr.region.amazonaws.com/temporal-sports-tracker-web`
@@ -23,11 +24,17 @@ Both components connect to a Temporal server and can be scaled independently.
 
 ## Quick Start
 
+### 0. Create Kubernetes secret for the Temporal Cloud API key
+
+```bash
+kubectl create secret generic temporal-sports-tracker-secrets --from-literal=TEMPORAL_API_KEY=your-api-key-value --namespace temporal-sports-tracker
+```
+
 ### 1. Build and Push Images
 
 ```bash
-# Build and push to ECR
-./scripts/build-and-push.sh 123456789012.dkr.ecr.us-west-2.amazonaws.com/temporal-sports-tracker latest
+# Build and push to Docker Hub
+./scripts/build-and-push.sh lainieftw/temporal-sports-tracker latest
 ```
 
 ### 2. Update Image References
@@ -36,12 +43,12 @@ Edit the image references in the Kubernetes manifests:
 
 **k8s/web-deployment.yaml:**
 ```yaml
-image: 123456789012.dkr.ecr.us-west-2.amazonaws.com/temporal-sports-tracker-web:latest
+image: lainieftw/temporal-sports-tracker-web:latest
 ```
 
 **k8s/worker-deployment.yaml:**
 ```yaml
-image: 123456789012.dkr.ecr.us-west-2.amazonaws.com/temporal-sports-tracker-worker:latest
+image: lainieftw/temporal-sports-tracker-worker:latest
 ```
 
 ### 3. Configure Temporal Connection
@@ -57,11 +64,8 @@ data:
 ### 4. Deploy to EKS
 
 ```bash
-# Deploy to default namespace
+# Deploy to temporal-sports-tracker namespace
 ./scripts/deploy.sh
-
-# Or deploy to a specific namespace
-./scripts/deploy.sh temporal-sports-tracker
 ```
 
 ## Detailed Configuration

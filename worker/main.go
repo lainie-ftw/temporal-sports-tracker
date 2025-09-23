@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	sports "temporal-sports-tracker"
 
 	"go.temporal.io/sdk/client"
@@ -16,8 +17,12 @@ func main() {
 	}
 	defer c.Close()
 
+	TaskQueueName := os.Getenv("TASK_QUEUE")
+	if TaskQueueName == "" {
+		log.Fatalln("TASK_QUEUE environment variable is not set")
+	}
 	// Create worker
-	w := worker.New(c, sports.TaskQueueName, worker.Options{})
+	w := worker.New(c, TaskQueueName, worker.Options{})
 
 	// Register workflows
 	w.RegisterWorkflow(sports.CollectGamesWorkflow)

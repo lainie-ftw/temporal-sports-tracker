@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: temporal-sports-tracker-worker
-  namespace: default
+  namespace: temporal-sports-tracker
   labels:
     app: temporal-sports-tracker
     component: worker
@@ -20,7 +20,13 @@ spec:
     spec:
       containers:
       - name: worker
-        image: your-ecr-repo/temporal-sports-tracker-worker:latest
+        image: lainieftw/temporal-sports-tracker-worker:latest
+        env:
+        - name: TEMPORAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: temporal-sports-tracker-secrets
+              key: TEMPORAL_API_KEY
         envFrom:
         - configMapRef:
             name: temporal-sports-tracker-config
@@ -31,26 +37,6 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
-        livenessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - "pgrep -f worker"
-          initialDelaySeconds: 30
-          periodSeconds: 30
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - "pgrep -f worker"
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 3
         securityContext:
           runAsNonRoot: true
           runAsUser: 1001
@@ -74,7 +60,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: temporal-sports-tracker-worker-hpa
-  namespace: default
+  namespace: temporal-sports-tracker
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

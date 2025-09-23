@@ -16,8 +16,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the web server binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o web-server ./cmd/web
+# Build the web server binary for amd64 Linux
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o web-server ./cmd/web
 
 # Final stage
 FROM alpine:latest

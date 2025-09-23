@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	sports "temporal-sports-tracker"
@@ -267,11 +268,16 @@ func (h *Handlers) StartTracking(w http.ResponseWriter, r *http.Request) {
 	// Create scheduling workflow ID with timestamp
 	workflowID := fmt.Sprintf("sports-%s", time.Now().Format("20060102-150405"))
 
-	options := client.StartWorkflowOptions{
-		ID:        workflowID,
-		TaskQueue: sports.TaskQueueName,
+	TaskQueueName := os.Getenv("TASK_QUEUE")
+	if TaskQueueName == "" {
+		http.Error(w, "TASK_QUEUE environment variable is not set", http.StatusInternalServerError)
+		return
 	}
 
+	options := client.StartWorkflowOptions{
+		ID:        workflowID,
+		TaskQueue: TaskQueueName,
+	}
 	// Start the CollectGamesWorkflow
 
 	//TODO collapse TrackingRequest.Teams and TrackingRequest.Conferences into a single []string of TeamsToTrack

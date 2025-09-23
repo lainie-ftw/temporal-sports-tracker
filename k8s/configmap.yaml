@@ -2,11 +2,11 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: temporal-sports-tracker-config
-  namespace: default
+  namespace: temporal-sports-tracker
 data:
   # Temporal server configuration
-  TEMPORAL_HOST: "temporal-frontend.temporal-system.svc.cluster.local:7233"
-  TEMPORAL_NAMESPACE: "default"
+  TEMPORAL_HOST: "us-west-2.aws.api.temporal.io:7233"
+  TEMPORAL_NAMESPACE: "laine.sdvdw"
   
   # Application configuration
   PORT: "8080"

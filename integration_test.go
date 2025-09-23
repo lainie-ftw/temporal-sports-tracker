@@ -1,6 +1,7 @@
 package sports
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -378,6 +379,7 @@ func TestIntegration_HelperFunctions(t *testing.T) {
 
 // Test constants and shared values
 func TestIntegration_SharedConstants(t *testing.T) {
+	TaskQueueName := os.Getenv("TASK_QUEUE")
 	// Test that TaskQueueName is defined and not empty
 	assert.NotEmpty(t, TaskQueueName)
 	assert.Equal(t, "sports-tracker-task-queue", TaskQueueName)

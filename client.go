@@ -18,6 +18,18 @@ func GetClientOptions() client.Options {
 	}))
 	slog.SetDefault(logger)
 
+	TemporalAddress := os.Getenv("TEMPORAL_HOST")
+	if TemporalAddress == "" {
+		slog.Error("TEMPORAL_HOST environment variable is not set")
+		os.Exit(1)
+	}
+
+	TemporalNamespace := os.Getenv("TEMPORAL_NAMESPACE")
+	if TemporalNamespace == "" {
+		slog.Error("TEMPORAL_NAMESPACE environment variable is not set")
+		os.Exit(1)
+	}
+
 	clientOptions := client.Options{
 		HostPort:  TemporalAddress,
 		Namespace: TemporalNamespace,

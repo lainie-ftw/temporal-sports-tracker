@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"slices"
 
 	"go.temporal.io/sdk/activity"
@@ -20,6 +21,11 @@ func StartGameWorkflow(ctx context.Context, game Game) error {
 	// We don't need to worry about duplicate "games" being created because we're using the game ID - if we try to start a second workflow with the same
 	// game ID -> workflow ID, the default of the Go SDK is to just return the run ID of the already running workflow. Other SDKs will have different defaults!
 	var workflowID = "game-" + game.ID
+
+	TaskQueueName := os.Getenv("TASK_QUEUE")
+	if TaskQueueName == "" {
+		return fmt.Errorf("TASK_QUEUE environment variable is not set")
+	}
 
 	options := client.StartWorkflowOptions{
 		ID:        workflowID,

@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Deploy Temporal Sports Tracker to EKS
-# Usage: ./scripts/deploy.sh [namespace]
+# Usage: ./scripts/deploy.sh
 
 set -e
 
-NAMESPACE="${1:-default}"
+NAMESPACE="temporal-sports-tracker"
 
 echo "Deploying Temporal Sports Tracker to EKS..."
 echo "Namespace: $NAMESPACE"
@@ -24,18 +24,6 @@ kubectl cluster-info --request-timeout=10s > /dev/null || {
     exit 1
 }
 
-# Create namespace if it doesn't exist (and it's not default)
-if [ "$NAMESPACE" != "default" ]; then
-    echo "Creating namespace $NAMESPACE if it doesn't exist..."
-    kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-fi
-
-# Update namespace in manifests if not default
-if [ "$NAMESPACE" != "default" ]; then
-    echo "Updating namespace in manifests..."
-    sed -i.bak "s/namespace: default/namespace: $NAMESPACE/g" k8s/*.yaml
-fi
-
 # Apply ConfigMap first
 echo "Applying ConfigMap..."
 kubectl apply -f k8s/configmap.yaml -n $NAMESPACE
@@ -48,15 +36,9 @@ kubectl apply -f k8s/web-deployment.yaml -n $NAMESPACE
 echo "Applying worker deployment..."
 kubectl apply -f k8s/worker-deployment.yaml -n $NAMESPACE
 
-# Restore original manifests if namespace was changed
-if [ "$NAMESPACE" != "default" ]; then
-    echo "Restoring original manifests..."
-    for file in k8s/*.yaml; do
-        if [ -f "${file}.bak" ]; then
-            mv "${file}.bak" "$file"
-        fi
-    done
-fi
+# Apply IngressRoute for web UI, set up for Traefik reverse proxy
+echo "Applying IngressRoute..."
+kubectl apply -f k8s/web-ingressroute.yaml -n $NAMESPACE
 
 echo ""
 echo "Deployment completed!"
