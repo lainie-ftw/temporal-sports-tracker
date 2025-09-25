@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-sports-tracker-worker
+  namespace: temporal-sports-tracker
+  labels:
+    app: temporal-sports-tracker
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal-sports-tracker
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: temporal-sports-tracker
+        component: worker
+    spec:
+      containers:
+      - name: worker
+        image: lainieftw/temporal-sports-tracker-worker:latest
+        env:
+        - name: TEMPORAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: temporal-sports-tracker-secrets
+              key: TEMPORAL_API_KEY
+        envFrom:
+        - configMapRef:
+            name: temporal-sports-tracker-config
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      securityContext:
+        fsGroup: 1001
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: temporal-sports-tracker-worker-hpa
+  namespace: temporal-sports-tracker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: temporal-sports-tracker-worker
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60

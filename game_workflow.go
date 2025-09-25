@@ -12,7 +12,14 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting Game Workflow", "gameID", game.ID, "homeTeam", game.HomeTeam.DisplayName, "awayTeam", game.AwayTeam.DisplayName)
 
-	//WorkflowRunTimeout: 6 * time.Hour
+	// Query handler for UI - return the game info
+	err := workflow.SetQueryHandler(ctx, "gameInfo", func() (Game, error) {
+		return game, nil
+	})
+	if err != nil {
+		logger.Error("Failed to set query handler", "error", err)
+		return "", err
+	}
 
 	// Set up activity options with retry policy
 	activityOptions := workflow.ActivityOptions{
@@ -48,10 +55,10 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 		lastScores[teamID] = score
 	}
 
-	// Monitor game every minute using a loop with timers
-	for workflow.Now(ctx).Before(game.StartTime.Add(4 * time.Hour)) {
-		// Wait 1 minute before next poll
-		timer := workflow.NewTimer(ctx, 1*time.Minute)
+	// Monitor the game for 5 hours after start time - could be modified to check for the game status instead
+	for workflow.Now(ctx).Before(game.StartTime.Add(5 * time.Hour)) {
+		// Wait 5 minutes before next poll
+		timer := workflow.NewTimer(ctx, 5*time.Minute)
 		selector := workflow.NewSelector(ctx)
 		selector.AddFuture(timer, func(f workflow.Future) {
 			// Timer fired, time to poll again
@@ -60,7 +67,7 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 		// Fetch current scores
 		var currentScores map[string]string
-		err := workflow.ExecuteActivity(ctx, GetGameScore, game.ID).Get(ctx, &currentScores)
+		err := workflow.ExecuteActivity(ctx, GetGameScore, game).Get(ctx, &currentScores)
 		if err != nil {
 			logger.Error("Failed to fetch game score", "gameID", game.ID, "error", err)
 			continue
@@ -90,7 +97,7 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 			err = workflow.ExecuteActivity(ctx, SendNotification, update).Get(ctx, nil)
 			if err != nil {
-				logger.Error("Failed to send Slack notification", "gameID", game.ID, "error", err)
+				logger.Error("Failed to send notification", "gameID", game.ID, "error", err)
 			}
 
 			// Update last scores

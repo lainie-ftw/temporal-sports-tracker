@@ -9,7 +9,7 @@ import (
 
 // CollectGamesWorkflow runs weekly to collect all games based on input and schedule each game as a GameWorkflow
 	//TODO: allow scheduling by team, teams, conference, or conferences, and get rid of duplicates (i.e., send Big10 and U of M, only make 1 U of M workflow)
-func CollectGamesWorkflow(ctx workflow.Context) error {
+func CollectGamesWorkflow(ctx workflow.Context, trackingRequest TrackingRequest) (int, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting Collect Games Workflow.")
 
@@ -25,13 +25,12 @@ func CollectGamesWorkflow(ctx workflow.Context) error {
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
-
 	// Fetch games from ESPN API
 	var games []Game
-	err := workflow.ExecuteActivity(ctx, GetGamesInConference).Get(ctx, &games)
+	err := workflow.ExecuteActivity(ctx, GetGames, trackingRequest).Get(ctx, &games)
 	if err != nil {
 		logger.Error("Failed to fetch games", "error", err)
-		return err
+		return 0, err
 	}
 
 	logger.Info("Fetched games", "count", len(games))
@@ -43,23 +42,8 @@ func CollectGamesWorkflow(ctx workflow.Context) error {
 			err := workflow.ExecuteActivity(ctx, StartGameWorkflow, game).Get(ctx, nil)
 			if err != nil {
 				logger.Error("Failed to start game workflow", "gameID", game.ID, "error", err)
-				return err
+				return 0, err
 			}
-
-			//Signal with start -> GameWorkflow for each game
-			// Schedule the game workflow to start at game time
-			//workflowOptions := workflow.ChildWorkflowOptions{
-			//	WorkflowID:        "game-" + game.ID,
-			//	WorkflowRunTimeout: 6 * time.Hour, // Games typically last 3-4 hours
-			//}
-
-			//ctx = workflow.WithChildOptions(ctx, workflowOptions)
-
-			//var result string
-			//err := workflow.ExecuteChildWorkflow(ctx, GameWorkflow, game).Get(ctx, &result)
-			//if err != nil {
-			//	logger.Error("Game workflow failed", "gameID", game.ID, "error", err)
-			//}
 		}
 	}
 
@@ -71,6 +55,7 @@ func CollectGamesWorkflow(ctx workflow.Context) error {
 
 	// Continue as new workflow
 //	return workflow.NewContinueAsNewError(ctx, WeeklyPollerWorkflow)
+	var totalGames = len(games)
 	logger.Info("Collect Games Workflow completed.")
-	return nil
+	return totalGames, nil
 }

@@ -1,0 +1,14 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: temporal-sports-tracker-ingressroute
+  namespace: temporal-sports-tracker
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`sports-tracker.tmprl-demo.cloud`)
+      kind: Rule
+      services:
+        - name: temporal-sports-tracker-web-service
+          port: 80
