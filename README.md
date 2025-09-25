@@ -3,12 +3,8 @@
 A Temporal workflow system that monitors Big Ten college football games and sends Slack notifications when scores change.
 
 ## To Do
-- Test game workflow while games are happening
 - Add real notifications 
 - (?) Add updates pushed to UI with scores
-- Figure out how to deploy to k8s
--- Build and deploy pipeline, probably via GH actions
--- SA account access
 - Add SDK metrics
 - Add SDK metrics to a dashboard
 -- https://github.com/temporalio/dashboards/tree/master/sdk
