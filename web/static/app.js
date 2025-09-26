@@ -203,8 +203,8 @@ async function handleTrackingSubmit(e) {
 }
 
 // View workflow in Temporal UI
-function viewWorkflow(workflowId, runId) {
-    const temporalUrl = `https://cloud.temporal.io/namespaces/laine.sdvdw/workflows/${workflowId}/${runId}/history`;
+function viewWorkflow(workflowUrl) {
+    const temporalUrl = `${workflowUrl}/history`;
     window.open(temporalUrl, '_blank');
 }
 
@@ -283,7 +283,7 @@ function displayWorkflows(workflows) {
             <div class="workflow-header">
                 <div class="workflow-title">
                     ${workflow.homeTeam && workflow.awayTeam ? 
-                        `${workflow.homeTeam} vs ${workflow.awayTeam}` : ''}
+                        `${workflow.homeTeam} (${workflow.homeScore}) vs ${workflow.awayTeam} (${workflow.awayScore})` : ''}
                     ${workflow.startTime ? 
                     `<div>${new Date(workflow.startTime).toLocaleString()}</div>` : ''}
                 </div>
@@ -296,7 +296,7 @@ function displayWorkflows(workflows) {
                 <div><strong>Run ID:</strong> ${workflow.runId}</div>
             </div>
             <div class="workflow-actions">
-                <button class="temporal-btn" onclick="viewWorkflow('${workflow.workflowId}', '${workflow.runId}')" alt="View Workflow in Temporal UI">
+                <button class="temporal-btn" onclick="viewWorkflow('${workflow.workflowUrl}')" alt="View Workflow in Temporal UI">
                 &nbsp;&nbsp;&nbsp;
                 </button>
                 <button onclick="viewGame('${workflow.gameId}', '${workflow.gameId}')" alt="View Game Info on ESPN">

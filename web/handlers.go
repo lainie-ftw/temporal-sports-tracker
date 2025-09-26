@@ -47,13 +47,15 @@ type Conference struct {
 }
 
 // GameWorkflow represents running workflow information
-//TODO: Add scores, namespace URL
 type GameWorkflow struct {
 	WorkflowID string    `json:"workflowId"`
 	RunID      string    `json:"runId"`
+	WorkflowURL string    `json:"workflowUrl,omitempty"`
 	Status     string    `json:"status"`
 	HomeTeam  string    `json:"homeTeam"`
+	HomeScore string    `json:"homeScore"`
 	AwayTeam  string    `json:"awayTeam"`
+	AwayScore string    `json:"awayScore"`
 	StartTime time.Time `json:"startTime"`
 	GameID   string    `json:"gameId"`
 }
@@ -339,6 +341,15 @@ func (h *Handlers) GetWorkflows(w http.ResponseWriter, r *http.Request) {
 			RunID:      execution.Execution.RunId,
 			Status:     execution.Status.String(),
 		}
+		
+		var tempURL = fmt.Sprintf("/namespaces/%s/workflows/%s/%s", os.Getenv("TEMPORAL_NAMESPACE"), workflow.WorkflowID, workflow.RunID)
+
+		// Add http or https and UI URL, based on TEMPORAL_HOST
+		if os.Getenv("TEMPORAL_HOST") != "localhost:7233" {
+			workflow.WorkflowURL = fmt.Sprintf("https://cloud.temporal.io%s", tempURL)
+		} else {
+			workflow.WorkflowURL = fmt.Sprintf("http://localhost:8233%s", tempURL)
+		}
 
 		// Get the info about the game from the gameInfo query in GameWorkflow
 		var gameInfo sports.Game
@@ -351,7 +362,9 @@ func (h *Handlers) GetWorkflows(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("Failed to get query result for workflow %s: %v\n", workflow.WorkflowID, err)
 		}
 		workflow.HomeTeam = gameInfo.HomeTeam.DisplayName
+		workflow.HomeScore = gameInfo.CurrentScore[gameInfo.HomeTeam.ID]
 		workflow.AwayTeam = gameInfo.AwayTeam.DisplayName
+		workflow.AwayScore = gameInfo.CurrentScore[gameInfo.AwayTeam.ID]
 		workflow.StartTime = gameInfo.StartTime
 		workflow.GameID = gameInfo.ID
 
