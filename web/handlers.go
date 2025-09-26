@@ -47,6 +47,7 @@ type Conference struct {
 }
 
 // GameWorkflow represents running workflow information
+//TODO: Add scores, namespace URL
 type GameWorkflow struct {
 	WorkflowID string    `json:"workflowId"`
 	RunID      string    `json:"runId"`

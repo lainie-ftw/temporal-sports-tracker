@@ -46,8 +46,8 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 	}
 
 	// Mock activities for the full workflow
-	env.OnActivity(GetGames, trackingRequest).Return(testGames, nil)
-	env.OnActivity(StartGameWorkflow, testGames[0]).Return(nil)
+	env.OnActivity(GetGamesActivity, trackingRequest).Return(testGames, nil)
+	env.OnActivity(StartGameWorkflowActivity, testGames[0]).Return(nil)
 
 	// Execute the collect games workflow
 	env.ExecuteWorkflow(CollectGamesWorkflow, trackingRequest)
@@ -85,35 +85,38 @@ func TestIntegration_GameWorkflowWithScoreUpdates(t *testing.T) {
 
 	// Mock score progression: 0-0 -> 7-0 -> 7-7
 	callCount := 0
-	env.OnActivity(GetGameScore, game.ID).Return(func(gameID string) (map[string]string, error) {
+	env.OnActivity(GetGameScoreActivity, &game).Return(func(g *Game) error {
 		callCount++
 		switch callCount {
 		case 1:
-			return map[string]string{"130": "0", "264": "0"}, nil
+			g.CurrentScore = map[string]string{"130": "0", "264": "0"}
 		case 2:
-			return map[string]string{"130": "7", "264": "0"}, nil
+			g.CurrentScore = map[string]string{"130": "7", "264": "0"}
 		default:
-			return map[string]string{"130": "7", "264": "7"}, nil
+			g.CurrentScore = map[string]string{"130": "7", "264": "7"}
 		}
+		return nil
 	})
 
 	// Expect notifications for score changes
-	env.OnActivity(SendNotification, ScoreUpdate{
-		GameID:    game.ID,
-		HomeTeam:  game.HomeTeam.DisplayName,
-		AwayTeam:  game.AwayTeam.DisplayName,
-		HomeScore: "7",
-		AwayScore: "0",
-		Timestamp: time.Now(),
+	env.OnActivity(SendNotificationListActivity, SendNotifications{
+		Channel: "logger",
+		NotificationList: []Notification{
+			{
+				Title:   "Score Update",
+				Message: "Michigan Wolverines 7 - Washington Huskies 0",
+			},
+		},
 	}).Return(nil).Once()
 
-	env.OnActivity(SendNotification, ScoreUpdate{
-		GameID:    game.ID,
-		HomeTeam:  game.HomeTeam.DisplayName,
-		AwayTeam:  game.AwayTeam.DisplayName,
-		HomeScore: "7",
-		AwayScore: "7",
-		Timestamp: time.Now(),
+	env.OnActivity(SendNotificationListActivity, SendNotifications{
+		Channel: "logger",
+		NotificationList: []Notification{
+			{
+				Title:   "Score Update",
+				Message: "Michigan Wolverines 7 - Washington Huskies 7",
+			},
+		},
 	}).Return(nil).Once()
 
 	// Set up timers to advance the workflow
@@ -164,10 +167,7 @@ func TestIntegration_ESPNTimeInWorkflow(t *testing.T) {
 	}
 
 	// Mock activities
-	env.OnActivity(GetGameScore, game.ID).Return(map[string]string{
-		"130": "0",
-		"264": "0",
-	}, nil)
+	env.OnActivity(GetGameScoreActivity, &game).Return(nil)
 
 	// Execute workflow
 	env.ExecuteWorkflow(GameWorkflow, game)
@@ -193,8 +193,8 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 		League: "college-football",
 	}
 
-	// Mock GetGames to fail
-	env.OnActivity(GetGames, trackingRequest).Return(nil, assert.AnError)
+	// Mock GetGamesActivity to fail
+	env.OnActivity(GetGamesActivity, trackingRequest).Return(nil, assert.AnError)
 
 	// Execute workflow
 	env.ExecuteWorkflow(CollectGamesWorkflow, trackingRequest)
@@ -222,14 +222,15 @@ func TestIntegration_ActivityRetries(t *testing.T) {
 		},
 	}
 
-	// Mock GetGameScore to fail first few times, then succeed
+	// Mock GetGameScoreActivity to fail first few times, then succeed
 	callCount := 0
-	env.OnActivity(GetGameScore, game.ID).Return(func(gameID string) (map[string]string, error) {
+	env.OnActivity(GetGameScoreActivity, &game).Return(func(g *Game) error {
 		callCount++
 		if callCount < 3 {
-			return nil, assert.AnError
+			return assert.AnError
 		}
-		return map[string]string{"130": "14", "264": "7"}, nil
+		g.CurrentScore = map[string]string{"130": "14", "264": "7"}
+		return nil
 	})
 
 	// Execute workflow
@@ -275,12 +276,12 @@ func TestIntegration_MultipleGamesWorkflow(t *testing.T) {
 		},
 	}
 
-	env.OnActivity(GetGames, trackingRequest).Return(testGames, nil)
+	env.OnActivity(GetGamesActivity, trackingRequest).Return(testGames, nil)
 	
-	// Only future games should trigger StartGameWorkflow
-	env.OnActivity(StartGameWorkflow, testGames[0]).Return(nil).Once()
-	env.OnActivity(StartGameWorkflow, testGames[1]).Return(nil).Once()
-	// testGames[2] should not trigger StartGameWorkflow because it's in the past
+	// Only future games should trigger StartGameWorkflowActivity
+	env.OnActivity(StartGameWorkflowActivity, testGames[0]).Return(nil).Once()
+	env.OnActivity(StartGameWorkflowActivity, testGames[1]).Return(nil).Once()
+	// testGames[2] should not trigger StartGameWorkflowActivity because it's in the past
 
 	// Execute workflow
 	env.ExecuteWorkflow(CollectGamesWorkflow, trackingRequest)
@@ -289,7 +290,7 @@ func TestIntegration_MultipleGamesWorkflow(t *testing.T) {
 	assert.True(t, env.IsWorkflowCompleted())
 	assert.NoError(t, env.GetWorkflowError())
 
-	// Verify only 2 StartGameWorkflow calls were made (for future games)
+	// Verify only 2 StartGameWorkflowActivity calls were made (for future games)
 	env.AssertExpectations(t)
 }
 
@@ -312,10 +313,7 @@ func TestIntegration_WorkflowCancellation(t *testing.T) {
 	}
 
 	// Mock activities
-	env.OnActivity(GetGameScore, game.ID).Return(map[string]string{
-		"130": "0",
-		"264": "0",
-	}, nil)
+	env.OnActivity(GetGameScoreActivity, &game).Return(nil)
 
 	// Set up cancellation after 30 seconds
 	env.RegisterDelayedCallback(func() {
@@ -353,8 +351,8 @@ func BenchmarkIntegration_FullWorkflow(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		env := testSuite.NewTestWorkflowEnvironment()
-		env.OnActivity(GetGames, trackingRequest).Return(testGames, nil)
-		env.OnActivity(StartGameWorkflow, testGames[0]).Return(nil)
+		env.OnActivity(GetGamesActivity, trackingRequest).Return(testGames, nil)
+		env.OnActivity(StartGameWorkflowActivity, testGames[0]).Return(nil)
 
 		env.ExecuteWorkflow(CollectGamesWorkflow, trackingRequest)
 	}

@@ -35,6 +35,11 @@ type Competition struct {
 	Competitors []Competitor `json:"competitors"`
 	Odds       []Odd         `json:"odds"`
 	Status     Status        `json:"status"`
+	Broadcasts  []Broadcast   `json:"broadcasts"`
+}
+
+type Broadcast struct {
+	Name   string `json:"name"`
 }
 
 type Competitor struct {
@@ -95,20 +100,22 @@ type Game struct {
 	Status       string
 	APIRoot      string // Base URL for the sport/league, e.g. "https://site.api.espn.com/apis/site/v2/sports/football/college-football"
 	Odds         string
+	TVNetwork	string
+	Quarter		string
 }
 
 // ScoreUpdate represents a score change notification
 type ScoreUpdate struct {
-	GameID      string
-	HomeTeam    string
-	AwayTeam    string
-	HomeScore   string
-	AwayScore   string
-	UnderdogTeam string
-	TVNetwork  	string
-	Quarter	    string
+	GameID        string
+	HomeTeam      string
+	AwayTeam      string
+	HomeScore     string
+	AwayScore     string
+	UnderdogTeam  string
+	TVNetwork  	  string
+	Quarter	      string
 	RemainingTime string
-	Timestamp   time.Time
+	Timestamp     time.Time
 }
 
 // TrackingRequest represents the request to start tracking
@@ -117,4 +124,15 @@ type TrackingRequest struct {
 	League      string   `json:"league"`
 	Teams       []string `json:"teams"`
 	Conferences []string `json:"conferences"`
+}
+
+// Notification represents a notification to be sent
+type Notification struct {
+	Title   string
+	Message string
+}
+
+type SendNotifications struct {
+	Channel string // e.g. "slack", "hass", etc.
+	NotificationList []Notification
 }

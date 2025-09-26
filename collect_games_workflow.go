@@ -27,7 +27,7 @@ func CollectGamesWorkflow(ctx workflow.Context, trackingRequest TrackingRequest)
 
 	// Fetch games from ESPN API
 	var games []Game
-	err := workflow.ExecuteActivity(ctx, GetGames, trackingRequest).Get(ctx, &games)
+	err := workflow.ExecuteActivity(ctx, GetGamesActivity, trackingRequest).Get(ctx, &games)
 	if err != nil {
 		logger.Error("Failed to fetch games", "error", err)
 		return 0, err
@@ -39,7 +39,7 @@ func CollectGamesWorkflow(ctx workflow.Context, trackingRequest TrackingRequest)
 	for _, game := range games {
 		// Only schedule games that haven't started yet
 		if game.Status == "pre" && game.StartTime.After(workflow.Now(ctx)) {
-			err := workflow.ExecuteActivity(ctx, StartGameWorkflow, game).Get(ctx, nil)
+			err := workflow.ExecuteActivity(ctx, StartGameWorkflowActivity, game).Get(ctx, nil)
 			if err != nil {
 				logger.Error("Failed to start game workflow", "gameID", game.ID, "error", err)
 				return 0, err

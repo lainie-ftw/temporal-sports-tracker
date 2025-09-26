@@ -43,8 +43,8 @@ func TestCollectGamesWorkflow(t *testing.T) {
 		},
 	}
 
-	env.OnActivity(GetGames, mock.Anything).Return(testGames, nil)
-	env.OnActivity(StartGameWorkflow, mock.Anything).Return(nil)
+	env.OnActivity(GetGamesActivity, mock.Anything).Return(testGames, nil)
+	env.OnActivity(StartGameWorkflowActivity, mock.Anything).Return(nil)
 
 	// Create tracking request
 	trackingRequest := TrackingRequest{
@@ -69,8 +69,8 @@ func TestCollectGamesWorkflow_NoGames(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestWorkflowEnvironment()
 
-	// Mock GetGames activity to return empty slice
-	env.OnActivity(GetGames, mock.Anything).Return([]Game{}, nil)
+	// Mock GetGamesActivity to return empty slice
+	env.OnActivity(GetGamesActivity, mock.Anything).Return([]Game{}, nil)
 
 	trackingRequest := TrackingRequest{
 		Sport:       "football",
@@ -94,8 +94,8 @@ func TestCollectGamesWorkflow_GetGamesFailure(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestWorkflowEnvironment()
 
-	// Mock GetGames activity to fail
-	env.OnActivity(GetGames, mock.Anything).Return(nil, assert.AnError)
+	// Mock GetGamesActivity to fail
+	env.OnActivity(GetGamesActivity, mock.Anything).Return(nil, assert.AnError)
 
 	trackingRequest := TrackingRequest{
 		Sport:       "football",
@@ -131,8 +131,8 @@ func TestCollectGamesWorkflow_StartGameWorkflowFailure(t *testing.T) {
 		},
 	}
 
-	env.OnActivity(GetGames, mock.Anything).Return([]Game{testGame}, nil)
-	env.OnActivity(StartGameWorkflow, mock.Anything).Return(assert.AnError)
+	env.OnActivity(GetGamesActivity, mock.Anything).Return([]Game{testGame}, nil)
+	env.OnActivity(StartGameWorkflowActivity, mock.Anything).Return(assert.AnError)
 
 	trackingRequest := TrackingRequest{
 		Sport:       "football",
@@ -196,9 +196,9 @@ func TestCollectGamesWorkflow_FiltersPastGames(t *testing.T) {
 		},
 	}
 
-	env.OnActivity(GetGames, mock.Anything).Return(testGames, nil)
-	// Only the future game should trigger StartGameWorkflow
-	env.OnActivity(StartGameWorkflow, mock.MatchedBy(func(game Game) bool {
+	env.OnActivity(GetGamesActivity, mock.Anything).Return(testGames, nil)
+	// Only the future game should trigger StartGameWorkflowActivity
+	env.OnActivity(StartGameWorkflowActivity, mock.MatchedBy(func(game Game) bool {
 		return game.ID == "game-future"
 	})).Return(nil).Once()
 
@@ -215,7 +215,7 @@ func TestCollectGamesWorkflow_FiltersPastGames(t *testing.T) {
 	assert.True(t, env.IsWorkflowCompleted())
 	assert.NoError(t, env.GetWorkflowError())
 
-	// Verify only one StartGameWorkflow was called (for the future game)
+	// Verify only one StartGameWorkflowActivity was called (for the future game)
 	env.AssertExpectations(t)
 }
 
@@ -266,8 +266,8 @@ func TestCollectGamesWorkflow_MultipleTeams(t *testing.T) {
 		},
 	}
 
-	env.OnActivity(GetGames, mock.Anything).Return(testGames, nil)
-	env.OnActivity(StartGameWorkflow, mock.Anything).Return(nil).Times(3)
+	env.OnActivity(GetGamesActivity, mock.Anything).Return(testGames, nil)
+	env.OnActivity(StartGameWorkflowActivity, mock.Anything).Return(nil).Times(3)
 
 	trackingRequest := TrackingRequest{
 		Sport:       "football",
@@ -283,7 +283,7 @@ func TestCollectGamesWorkflow_MultipleTeams(t *testing.T) {
 	assert.True(t, env.IsWorkflowCompleted())
 	assert.NoError(t, env.GetWorkflowError())
 
-	// Verify all games triggered StartGameWorkflow
+	// Verify all games triggered StartGameWorkflowActivity
 	env.AssertExpectations(t)
 }
 
@@ -291,8 +291,8 @@ func TestCollectGamesWorkflow_EmptyTrackingRequest(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestWorkflowEnvironment()
 
-	// Mock GetGames to return empty slice
-	env.OnActivity(GetGames, mock.Anything).Return([]Game{}, nil)
+	// Mock GetGamesActivity to return empty slice
+	env.OnActivity(GetGamesActivity, mock.Anything).Return([]Game{}, nil)
 
 	// Empty tracking request
 	trackingRequest := TrackingRequest{
@@ -309,7 +309,7 @@ func TestCollectGamesWorkflow_EmptyTrackingRequest(t *testing.T) {
 	assert.True(t, env.IsWorkflowCompleted())
 	assert.NoError(t, env.GetWorkflowError())
 
-	// Verify GetGames was still called
+	// Verify GetGamesActivity was still called
 	env.AssertExpectations(t)
 }
 
@@ -342,7 +342,7 @@ func TestCollectGamesWorkflow_DifferentSports(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := testSuite.NewTestWorkflowEnvironment()
 			
-			env.OnActivity(GetGames, mock.Anything).Return([]Game{}, nil)
+			env.OnActivity(GetGamesActivity, mock.Anything).Return([]Game{}, nil)
 
 			// Execute workflow
 			env.ExecuteWorkflow(CollectGamesWorkflow, tc.trackingRequest)
@@ -383,8 +383,8 @@ func BenchmarkCollectGamesWorkflow(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		env := testSuite.NewTestWorkflowEnvironment()
-		env.OnActivity(GetGames, mock.Anything).Return(testGames, nil)
-		env.OnActivity(StartGameWorkflow, mock.Anything).Return(nil)
+		env.OnActivity(GetGamesActivity, mock.Anything).Return(testGames, nil)
+		env.OnActivity(StartGameWorkflowActivity, mock.Anything).Return(nil)
 
 		env.ExecuteWorkflow(CollectGamesWorkflow, trackingRequest)
 	}
