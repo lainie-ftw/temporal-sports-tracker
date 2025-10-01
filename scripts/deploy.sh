@@ -40,6 +40,11 @@ kubectl apply -f k8s/worker-deployment.yaml -n $NAMESPACE
 echo "Applying IngressRoute..."
 kubectl apply -f k8s/web-ingressroute.yaml -n $NAMESPACE
 
+# Restart pods
+echo "Restarting pods to pick up new configuration..."
+kubectl rollout restart deployment/temporal-sports-tracker-web -n $NAMESPACE
+kubectl rollout restart deployment/temporal-sports-tracker-worker -n $NAMESPACE
+
 echo ""
 echo "Deployment completed!"
 echo ""

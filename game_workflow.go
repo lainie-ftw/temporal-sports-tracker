@@ -88,12 +88,14 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 		})
 		selector.Select(ctx)
 
-		// Fetch current score - this will update game.CurrentScore
-		err := workflow.ExecuteActivity(ctx, GetGameScoreActivity, game).Get(ctx, nil)
+		var currentScores map[string]string
+		err := workflow.ExecuteActivity(ctx, GetGameScoreActivity, game).Get(ctx, &currentScores)
 		if err != nil {
 			logger.Error("Failed to fetch game score", "gameID", game.ID, "error", err)
 			continue
 		}
+
+		game.CurrentScore = currentScores
 
 		// Check for score changes
 		scoreChanged := false
@@ -109,12 +111,14 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 			notificationList := []Notification{}
 
-			if slices.Contains(notificationTypes, "score_update") {
+			if slices.Contains(notificationTypes, "score_change") {
 				scoreUpdateNotification := buildScoreUpdateNotification(game)
 				notificationList = append(notificationList, scoreUpdateNotification)
+				logger.Info("Added score update notification", "gameID", game.ID)
 			}
 
 			if slices.Contains(notificationTypes, "underdog") {
+				logger.Info("NotificationTypes contains underdog. Checking for underdog status", "gameID", game.ID)
 				// We only want to send a notification when the underdog pulls ahead
 				underdogTeam := determineUnderdog(game)
 				if !underdogWinning {
@@ -130,10 +134,12 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 				if underdogWinning {
 					underdogNotification := buildUnderdogNotification(game, underdogTeam)
 					notificationList = append(notificationList, underdogNotification)
+					logger.Info("Added underdog notification", "gameID", game.ID)
 				}
 			}
 
 			logger.Info("Score change detected", "gameID", game.ID)
+			logger.Info("Notifications to send", "count", len(notificationList), "notifications", notificationList)
 
 			// For each notification channel, send the collected list of notifications:
 			for channel := range notificationChannels {

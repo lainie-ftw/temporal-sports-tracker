@@ -27,6 +27,18 @@ spec:
             secretKeyRef:
               name: temporal-sports-tracker-secrets
               key: TEMPORAL_API_KEY
+        # Home Assistant Webhook URL, if used
+#        - name: HASS_WEBHOOK_URL
+#          valueFrom:
+#            secretKeyRef:
+#              name: temporal-sports-tracker-hass-webhook
+#              key: HASS_WEBHOOK_URL
+        # Slack Webhook URL, if used
+#        - name: SLACK_WEBHOOK_URL
+#          valueFrom:
+#            secretKeyRef:
+#              name: temporal-sports-tracker-slack-webhook
+#              key: SLACK_WEBHOOK_URL
         envFrom:
         - configMapRef:
             name: temporal-sports-tracker-config

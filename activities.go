@@ -178,7 +178,7 @@ func BuildGame(comp Competition, homeTeam, awayTeam Competitor, apiRoot string) 
 }
 
 // FetchGameScoreActivity fetches current score for a specific game
-func GetGameScoreActivity(ctx context.Context, game *Game) error {
+func GetGameScoreActivity(ctx context.Context, game Game) (map[string]string, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Fetching game score", "gameID", game.ID)
 
@@ -187,18 +187,18 @@ func GetGameScoreActivity(ctx context.Context, game *Game) error {
 	
 	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("failed to fetch game score: %w", err)
+		return nil, fmt.Errorf("failed to fetch game score: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var espnResp ESPNResponse
 	if err := json.Unmarshal(body, &espnResp); err != nil {
-		return fmt.Errorf("failed to unmarshal ESPN response: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal ESPN response: %w", err)
 	}
 
 	// Find the specific game
@@ -219,12 +219,12 @@ func GetGameScoreActivity(ctx context.Context, game *Game) error {
 			}
 			
 			game.CurrentScore = scores
-			logger.Info("Fetched game score", "gameID", game.ID, "scores", scores)
-			return nil
+			logger.Info("Fetched game score", "gameID", game.ID, "scores", game.CurrentScore)
+			return scores, nil
 		}
 	}
 
-	return fmt.Errorf("game not found: %s", game.ID)
+	return nil, fmt.Errorf("game not found: %s", game.ID)
 }
 
 func SendNotificationListActivity(ctx context.Context, sendNotifications SendNotifications) error {
