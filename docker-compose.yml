@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: temporal-sports-tracker-web
+    ports:
+      - "8080:8080"
+    environment:
+      - TEMPORAL_HOST=${TEMPORAL_HOST}
+      - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE}
+      - TASK_QUEUE=${TASK_QUEUE}
+      - TEMPORAL_API_KEY=${TEMPORAL_API_KEY}
+      - HASS_WEBHOOK_URL=${HASS_WEBHOOK_URL}
+    restart: unless-stopped
+    networks:
+      - sports-tracker-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: temporal-sports-tracker-worker
+    environment:
+      - TEMPORAL_HOST=${TEMPORAL_HOST}
+      - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE}
+      - TASK_QUEUE=${TASK_QUEUE}
+      - TEMPORAL_API_KEY=${TEMPORAL_API_KEY}
+      - HASS_WEBHOOK_URL=${HASS_WEBHOOK_URL}
+    restart: unless-stopped
+    networks:
+      - sports-tracker-network
+
+networks:
+  sports-tracker-network:
+    driver: bridge

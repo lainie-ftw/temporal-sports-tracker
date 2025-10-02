@@ -116,7 +116,9 @@ func (h *Handlers) GetLeagues(w http.ResponseWriter, r *http.Request) {
 		}
 	case "soccer":
 		leagues = []League{
-			{ID: "mls", Name: "MLS", Path: "mls"},
+			{ID: "usa.1", Name: "MLS", Path: "usa.1"},
+			{ID: "eng.1", Name: "English Premier League", Path: "eng.1"},
+			{ID: "uefa.champions", Name: "UEFA Champions League", Path: "uefa.champions"},
 		}
 	default:
 		http.Error(w, "Unsupported sport", http.StatusBadRequest)
