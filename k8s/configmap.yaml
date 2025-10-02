@@ -11,6 +11,8 @@ data:
   # Application configuration
   PORT: "8080"
   LOG_LEVEL: "info"
+  NOTIFICATION_TYPES: "underdog,score_change" # Comma-separated list, options: underdog,score_change
+  NOTIFICATION_CHANNELS: "logger" # Comma-separated list, options: logger,slack,hass
   
   # Task queue name (should match your Go code)
   TASK_QUEUE: "sports-tracker-task-queue"

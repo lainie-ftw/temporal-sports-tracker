@@ -1,6 +1,7 @@
 package sports
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 )
 
 // Start a game workflow
-func StartGameWorkflow(ctx context.Context, game Game) error {
+func StartGameWorkflowActivity(ctx context.Context, game Game) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Starting a game workflow with game ID ", "gameID", game.ID)
 
@@ -47,7 +48,7 @@ func StartGameWorkflow(ctx context.Context, game Game) error {
 }
 
 // Get games based on user input from the ESPN API
-func GetGames(ctx context.Context, trackingRequest TrackingRequest) ([]Game, error) {
+func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]Game, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Fetching games from ESPN API")
 
@@ -168,11 +169,16 @@ func BuildGame(comp Competition, homeTeam, awayTeam Competitor, apiRoot string) 
 		game.AwayTeam.Favorite = comp.Odds[0].AwayTeamOdds.Favorite
 		game.AwayTeam.Underdog = comp.Odds[0].AwayTeamOdds.Underdog
 	}
+
+	// Add TV network
+	if len(comp.Broadcasts) > 0 {
+		game.TVNetwork = comp.Broadcasts[0].Name
+	}
 	return game
 }
 
 // FetchGameScoreActivity fetches current score for a specific game
-func GetGameScore(ctx context.Context, game Game) (map[string]string, error) {
+func GetGameScoreActivity(ctx context.Context, game Game) (map[string]string, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Fetching game score", "gameID", game.ID)
 
@@ -204,7 +210,16 @@ func GetGameScore(ctx context.Context, game Game) (map[string]string, error) {
 			for _, competitor := range comp.Competitors {
 				scores[competitor.Team.ID] = competitor.Score
 			}
-
+			
+			// Update the current quarter
+			if comp.Status.Period > 0 {
+				game.Quarter = fmt.Sprintf("%d", comp.Status.Period)
+			} else {
+				game.Quarter = "0"
+			}
+			
+			game.CurrentScore = scores
+			logger.Info("Fetched game score", "gameID", game.ID, "scores", game.CurrentScore)
 			return scores, nil
 		}
 	}
@@ -212,46 +227,110 @@ func GetGameScore(ctx context.Context, game Game) (map[string]string, error) {
 	return nil, fmt.Errorf("game not found: %s", game.ID)
 }
 
-func SendNotification(ctx context.Context, update ScoreUpdate) error {
-	return SendSlackNotificationActivity(ctx, update)
-}
+func SendNotificationListActivity(ctx context.Context, sendNotifications SendNotifications) error {
+	// For each notification message in the input list, send it to the specified channel in sendNotifications.Channel
+	// NOTE: This means that if one notification in the list fails, the whole activity fails and none of the notifications are sent.
+	// You could also do this with an activity per notification.
+	for _, notification := range sendNotifications.NotificationList {
+		logger := activity.GetLogger(ctx)
+		logger.Info("Sending notification", "channel", sendNotifications.Channel, "title", notification.Title, "message", notification.Message)
 
-func SendHomeAssistantNotificationActivity(ctx context.Context, update ScoreUpdate) error {
-	logger := activity.GetLogger(ctx)
-
-	message := fmt.Sprintf("🏈 Score Update!\n%s vs %s\nScore: %s - %s\nTime: %s",
-		update.HomeTeam, update.AwayTeam, update.HomeScore, update.AwayScore,
-		update.Timestamp.Format("2006-01-02 15:04:05"))
-
-	//TODO: add underdog team name, TVNetwork, Quarter, RemainingTime
-	//title := "[update.conference] [update.sport]: Team Chaos!"
-		//	message := [update.UnderdogTeam] is winning in the [update.HomeTeam] vs. [update.AwayTeam] game on [update.TVNetwork]! It's currently Q[update.Quarter] with [update.RemainingTime] left.
-//	Score: [update.HomeTeam] [update.HomeScore] - [update.AwayTeam] [update.AwayScore]
-
-	logger.Info("HASS notification (mocked)", "message", message)
-	//jsonScoreUpdate := map[string]string{
-	//	"message": message,
-	//}	
-	//jsonData, err := json.Marshal(jsonScoreUpdate)
-	//http.Post("https://your-home-assistant:8123/api/webhook/some_hook_id", "application/json", body io.Reader??)
-	// curl -X POST -H "Content-Type: application/json" -d '{ "message": "message", "title": "title" }' HASS_WEBHOOK_URL 
-
+		// Call the appropriate activity based on the channel
+		switch sendNotifications.Channel {
+		case "slack":
+			err := SendSlackNotification(ctx, notification)
+			if err != nil {
+				return fmt.Errorf("failed to send Slack notification: %w", err)
+			}
+		case "hass":
+			err := SendHomeAssistantNotification(ctx, notification)
+			if err != nil {
+				return fmt.Errorf("failed to send Home Assistant notification: %w", err)
+			}
+		case "logger":
+			logger := activity.GetLogger(ctx)
+			logger.Info("Logger notification", "title", notification.Title, "message", notification.Message)
+		default:
+			return fmt.Errorf("unknown notification channel: %s", sendNotifications.Channel)
+		}
+	}
 	return nil
 }
 
-// SendSlackNotificationActivity sends a notification to Slack (mocked)
-func SendSlackNotificationActivity(ctx context.Context, update ScoreUpdate) error {
+func SendHomeAssistantNotification(ctx context.Context, notification Notification) error {
 	logger := activity.GetLogger(ctx)
+	logger.Info("Sending Home Assistant notification", "title", notification.Title, "message", notification.Message)
 
-	// Mock Slack notification - in real implementation, this would send to Slack webhook
-	message := fmt.Sprintf("🏈 Score Update!\n%s vs %s\nScore: %s - %s\nTime: %s",
-		update.HomeTeam, update.AwayTeam, update.HomeScore, update.AwayScore,
-		update.Timestamp.Format("2006-01-02 15:04:05"))
+	hassWebhook := os.Getenv("HASS_WEBHOOK_URL")
+	if hassWebhook == "" {
+		return fmt.Errorf("HASS_WEBHOOK_URL environment variable is not set")
+	}
+	// Build the payload for Home Assistant
+	jsonScoreUpdate := map[string]string{
+		"title":   notification.Title,
+		"message": notification.Message,
+	}	
+	jsonData, err := json.Marshal(jsonScoreUpdate)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	// Send the POST request to Home Assistant webhook with jsonData payload
+	req, err := http.NewRequest("POST", hassWebhook, io.NopCloser(io.Reader(bytes.NewReader(jsonData))))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
 
-	logger.Info("Slack notification (mocked)", "message", message)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
 
-	// Simulate some processing time
-	// time.Sleep(100 * time.Millisecond)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("received non-OK response from Home Assistant: %s", resp.Status)
+	}
+	return nil
+}
+
+// SendSlackNotificationActivity sends a notification to Slack
+// TODO: test this
+func SendSlackNotification(ctx context.Context, notification Notification) error {
+	logger := activity.GetLogger(ctx)
+	logger.Info("Sending Slack notification", "title", notification.Title, "message", notification.Message)
+
+	slackWebhook := os.Getenv("SLACK_WEBHOOK_URL")
+	if slackWebhook == "" {
+		return fmt.Errorf("SLACK_WEBHOOK_URL environment variable is not set")
+	}
+
+	// Build the payload for Slack
+	payload := map[string]string{
+		"text": fmt.Sprintf("*%s*\n%s", notification.Title, notification.Message),
+	}
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+
+	// Send the POST request to Slack webhook with jsonData payload
+	req, err := http.NewRequest("POST", slackWebhook, io.NopCloser(io.Reader(bytes.NewReader(jsonData))))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("received non-OK response from Slack: %s", resp.Status)
+	}
 
 	return nil
 }

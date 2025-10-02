@@ -4,6 +4,8 @@ go 1.25.0
 
 require go.temporal.io/sdk v1.26.0
 
+require github.com/joho/godotenv v1.5.1
+
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect

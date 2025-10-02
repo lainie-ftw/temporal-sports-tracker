@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"os"
+	"github.com/joho/godotenv"
 
 	"go.temporal.io/sdk/client"
 	tlog "go.temporal.io/sdk/log"
@@ -17,6 +18,11 @@ func GetClientOptions() client.Options {
 		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
+
+	err := godotenv.Load()
+	if err != nil {
+		logger.Warn("No .env file found, relying on environment variables")
+	}	
 
 	TemporalAddress := os.Getenv("TEMPORAL_HOST")
 	if TemporalAddress == "" {
@@ -54,13 +60,17 @@ func GetClientOptions() client.Options {
 		},
 	}
 
-	TemporalAPIKey := os.Getenv("TEMPORAL_API_KEY")
-	if TemporalAPIKey == "" {
-		slog.Error("TEMPORAL_API_KEY environment variable is not set")
-		os.Exit(1)
-	}
+	if TemporalAddress != "localhost:7233" && TemporalAddress != "host.docker.internal:7233"{
+		TemporalAPIKey := os.Getenv("TEMPORAL_API_KEY")
+		if TemporalAPIKey == "" {
+			slog.Error("TEMPORAL_API_KEY environment variable is not set")
+			os.Exit(1)
+		}
 
-	clientOptions.Credentials = client.NewAPIKeyStaticCredentials(TemporalAPIKey)
+		clientOptions.Credentials = client.NewAPIKeyStaticCredentials(TemporalAPIKey)
+	} else {
+		clientOptions.ConnectionOptions.TLS = nil // Disable TLS for local development
+	}
 
 	return clientOptions
 }

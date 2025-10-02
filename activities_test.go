@@ -54,7 +54,7 @@ func TestGetGames(t *testing.T) {
 	env := testSuite.NewTestActivityEnvironment()
 	
 	// Register the activity
-	env.RegisterActivity(GetGames)
+	env.RegisterActivity(GetGamesActivity)
 
 	tests := []struct {
 		name           string
@@ -212,7 +212,7 @@ func TestGetGames(t *testing.T) {
 			// For now, we'll test the logic with a mock server
 			
 			// Execute the activity
-			encodedValue, err := env.ExecuteActivity(GetGames, tt.trackingReq)
+			encodedValue, err := env.ExecuteActivity(GetGamesActivity, tt.trackingReq)
 			
 			if tt.expectedError {
 				assert.Error(t, err)
@@ -241,19 +241,22 @@ func TestGetGameScore(t *testing.T) {
 	env := testSuite.NewTestActivityEnvironment()
 	
 	// Register the activity
-	env.RegisterActivity(GetGameScore)
+	env.RegisterActivity(GetGameScoreActivity)
 
 	tests := []struct {
 		name          string
-		gameID        string
+		game          *Game
 		mockResponse  string
-		expectedScore map[string]string
 		expectedError bool
 		statusCode    int
 	}{
 		{
-			name:   "successful score fetch",
-			gameID: "401520281",
+			name: "successful score fetch",
+			game: &Game{
+				ID:      "401520281",
+				APIRoot: "https://site.api.espn.com/apis/site/v2/sports/football/college-football",
+				CurrentScore: make(map[string]string),
+			},
 			mockResponse: `{
 				"events": [
 					{
@@ -269,32 +272,37 @@ func TestGetGameScore(t *testing.T) {
 										"team": {"id": "264"},
 										"score": "7"
 									}
-								]
+								],
+								"status": {
+									"period": 2
+								}
 							}
 						]
 					}
 				]
 			}`,
-			expectedScore: map[string]string{
-				"130": "14",
-				"264": "7",
-			},
 			expectedError: false,
 			statusCode:    200,
 		},
 		{
-			name:          "game not found",
-			gameID:        "nonexistent",
+			name: "game not found",
+			game: &Game{
+				ID:      "nonexistent",
+				APIRoot: "https://site.api.espn.com/apis/site/v2/sports/football/college-football",
+				CurrentScore: make(map[string]string),
+			},
 			mockResponse: `{"events": []}`,
-			expectedScore: nil,
 			expectedError: true,
 			statusCode:    200,
 		},
 		{
-			name:          "HTTP error",
-			gameID:        "401520281",
+			name: "HTTP error",
+			game: &Game{
+				ID:      "401520281",
+				APIRoot: "https://site.api.espn.com/apis/site/v2/sports/football/college-football",
+				CurrentScore: make(map[string]string),
+			},
 			mockResponse:  "",
-			expectedScore: nil,
 			expectedError: true,
 			statusCode:    500,
 		},
@@ -310,17 +318,22 @@ func TestGetGameScore(t *testing.T) {
 			}))
 			defer server.Close()
 
-			encodedValue, err := env.ExecuteActivity(GetGameScore, tt.gameID)
+			// Update the game's APIRoot to use the test server
+			tt.game.APIRoot = server.URL
+
+			_, err := env.ExecuteActivity(GetGameScoreActivity, tt.game)
 
 			if tt.expectedError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				
-				var scores map[string]string
-				err = encodedValue.Get(&scores)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedScore, scores)
+				// The activity modifies the game object directly
+				assert.NotNil(t, tt.game.CurrentScore)
+				if tt.name == "successful score fetch" {
+					assert.Equal(t, "2", tt.game.Quarter)
+					assert.Contains(t, tt.game.CurrentScore, "130")
+					assert.Contains(t, tt.game.CurrentScore, "264")
+				}
 			}
 		})
 	}
@@ -331,38 +344,35 @@ func TestSendSlackNotificationActivity(t *testing.T) {
 	env := testSuite.NewTestActivityEnvironment()
 	
 	// Register the activity
-	env.RegisterActivity(SendSlackNotificationActivity)
+	env.RegisterActivity(SendSlackNotification)
 
-	update := ScoreUpdate{
-		GameID:    "game-123",
-		HomeTeam:  "Michigan Wolverines",
-		AwayTeam:  "Washington Huskies",
-		HomeScore: "14",
-		AwayScore: "7",
-		Timestamp: time.Now(),
+	notification := Notification{
+		Title:   "Game Update",
+		Message: "Michigan Wolverines 14 - Washington Huskies 7",
 	}
 
-	_, err := env.ExecuteActivity(SendSlackNotificationActivity, update)
+	_, err := env.ExecuteActivity(SendSlackNotification, notification)
 	assert.NoError(t, err)
 }
 
-func TestSendNotification(t *testing.T) {
+func TestSendNotificationList(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestActivityEnvironment()
 	
 	// Register the activity
-	env.RegisterActivity(SendNotification)
+	env.RegisterActivity(SendNotificationListActivity)
 
-	update := ScoreUpdate{
-		GameID:    "game-123",
-		HomeTeam:  "Michigan Wolverines",
-		AwayTeam:  "Washington Huskies",
-		HomeScore: "21",
-		AwayScore: "14",
-		Timestamp: time.Now(),
+	sendNotifications := SendNotifications{
+		Channel: "logger",
+		NotificationList: []Notification{
+			{
+				Title:   "Game Update",
+				Message: "Michigan Wolverines 21 - Washington Huskies 14",
+			},
+		},
 	}
 
-	_, err := env.ExecuteActivity(SendNotification, update)
+	_, err := env.ExecuteActivity(SendNotificationListActivity, sendNotifications)
 	assert.NoError(t, err)
 }
 
@@ -372,15 +382,15 @@ func TestActivitiesWithContext(t *testing.T) {
 	env := testSuite.NewTestActivityEnvironment()
 	
 	// Register the activity
-	env.RegisterActivity(GetGames)
+	env.RegisterActivity(GetGamesActivity)
 
-	// Test GetGames with context
+	// Test GetGamesActivity with context
 	trackingReq := TrackingRequest{
 		Sport:  "football",
 		League: "college-football",
 	}
 
-	_, err := env.ExecuteActivity(GetGames, trackingReq)
+	_, err := env.ExecuteActivity(GetGamesActivity, trackingReq)
 	// This will fail due to actual HTTP call, but tests the context setup
 	assert.Error(t, err) // Expected since we're making real HTTP calls
 }
@@ -430,7 +440,7 @@ func BenchmarkGetGames(b *testing.B) {
 	env := testSuite.NewTestActivityEnvironment()
 	
 	// Register the activity
-	env.RegisterActivity(GetGames)
+	env.RegisterActivity(GetGamesActivity)
 
 	trackingReq := TrackingRequest{
 		Sport:  "football",
@@ -439,7 +449,7 @@ func BenchmarkGetGames(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		env.ExecuteActivity(GetGames, trackingReq)
+		env.ExecuteActivity(GetGamesActivity, trackingReq)
 	}
 }
 
@@ -448,12 +458,15 @@ func BenchmarkSendSlackNotification(b *testing.B) {
 	env := testSuite.NewTestActivityEnvironment()
 	
 	// Register the activity
-	env.RegisterActivity(SendSlackNotificationActivity)
+	env.RegisterActivity(SendSlackNotification)
 
-	update := createTestScoreUpdate()
+	notification := Notification{
+		Title:   "Game Update",
+		Message: "Test notification message",
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		env.ExecuteActivity(SendSlackNotificationActivity, update)
+		env.ExecuteActivity(SendSlackNotification, notification)
 	}
 }

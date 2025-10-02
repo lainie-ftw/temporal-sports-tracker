@@ -14,11 +14,8 @@ func TestGameWorkflow(t *testing.T) {
 	env := testSuite.NewTestWorkflowEnvironment()
 
 	// Mock activities
-	env.OnActivity(GetGameScore, mock.Anything).Return(map[string]string{
-		"130": "0",
-		"264": "0",
-	}, nil)
-	env.OnActivity(SendNotification, mock.Anything).Return(nil)
+	env.OnActivity(GetGameScoreActivity, mock.Anything).Return(nil)
+	env.OnActivity(SendNotificationListActivity, mock.Anything).Return(nil)
 
 	// Create test game
 	game := Game{
@@ -66,15 +63,17 @@ func TestGameWorkflow_ScoreChange(t *testing.T) {
 
 	// Mock activities with score changes
 	callCount := 0
-	env.OnActivity(GetGameScore, mock.Anything).Return(func(gameID string) (map[string]string, error) {
+	env.OnActivity(GetGameScoreActivity, mock.Anything).Return(func(game *Game) error {
 		callCount++
 		if callCount == 1 {
-			return map[string]string{"130": "0", "264": "0"}, nil
+			game.CurrentScore = map[string]string{"130": "0", "264": "0"}
+		} else {
+			game.CurrentScore = map[string]string{"130": "7", "264": "0"}
 		}
-		return map[string]string{"130": "7", "264": "0"}, nil
+		return nil
 	})
 
-	env.OnActivity(SendNotification, mock.Anything).Return(nil)
+	env.OnActivity(SendNotificationListActivity, mock.Anything).Return(nil)
 
 	// Create test game that starts in the past
 	game := Game{
@@ -116,10 +115,7 @@ func TestGameWorkflow_FutureGame(t *testing.T) {
 	env := testSuite.NewTestWorkflowEnvironment()
 
 	// Mock activities
-	env.OnActivity(GetGameScore, mock.Anything).Return(map[string]string{
-		"130": "0",
-		"264": "0",
-	}, nil)
+	env.OnActivity(GetGameScoreActivity, mock.Anything).Return(nil)
 
 	// Create test game that starts in the future
 	futureTime := time.Now().Add(2 * time.Hour)
@@ -159,10 +155,7 @@ func TestGameWorkflow_QueryHandler(t *testing.T) {
 	env := testSuite.NewTestWorkflowEnvironment()
 
 	// Mock activities
-	env.OnActivity(GetGameScore, mock.Anything).Return(map[string]string{
-		"130": "0",
-		"264": "0",
-	}, nil)
+	env.OnActivity(GetGameScoreActivity, mock.Anything).Return(nil)
 
 	game := Game{
 		ID:        "test-game-query",
@@ -197,7 +190,7 @@ func TestGameWorkflow_ActivityFailure(t *testing.T) {
 	env := testSuite.NewTestWorkflowEnvironment()
 
 	// Mock activity to fail
-	env.OnActivity(GetGameScore, mock.Anything).Return(nil, assert.AnError)
+	env.OnActivity(GetGameScoreActivity, mock.Anything).Return(assert.AnError)
 
 	game := Game{
 		ID:        "test-game-fail",
@@ -226,11 +219,8 @@ func TestGameWorkflow_LongRunning(t *testing.T) {
 	env := testSuite.NewTestWorkflowEnvironment()
 
 	// Mock activities
-	env.OnActivity(GetGameScore, mock.Anything).Return(map[string]string{
-		"130": "14",
-		"264": "7",
-	}, nil)
-	env.OnActivity(SendNotification, mock.Anything).Return(nil)
+	env.OnActivity(GetGameScoreActivity, mock.Anything).Return(nil)
+	env.OnActivity(SendNotificationListActivity, mock.Anything).Return(nil)
 
 	game := Game{
 		ID:        "test-game-long",
@@ -271,13 +261,10 @@ func TestGameWorkflow_NoScoreChange(t *testing.T) {
 	env := testSuite.NewTestWorkflowEnvironment()
 
 	// Mock activities - always return same score
-	env.OnActivity(GetGameScore, mock.Anything).Return(map[string]string{
-		"130": "0",
-		"264": "0",
-	}, nil)
+	env.OnActivity(GetGameScoreActivity, mock.Anything).Return(nil)
 
-	// SendNotification should not be called since no score changes
-	env.OnActivity(SendNotification, mock.Anything).Return(nil).Times(0)
+	// SendNotificationListActivity should not be called since no score changes
+	env.OnActivity(SendNotificationListActivity, mock.Anything).Return(nil).Times(0)
 
 	game := Game{
 		ID:        "test-game-no-change",
@@ -309,7 +296,7 @@ func TestGameWorkflow_NoScoreChange(t *testing.T) {
 	assert.True(t, env.IsWorkflowCompleted())
 	assert.NoError(t, env.GetWorkflowError())
 
-	// Verify SendNotification was not called
+	// Verify SendNotificationListActivity was not called
 	env.AssertExpectations(t)
 }
 
@@ -334,10 +321,7 @@ func BenchmarkGameWorkflow(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		env := testSuite.NewTestWorkflowEnvironment()
-		env.OnActivity(GetGameScore, mock.Anything).Return(map[string]string{
-			"130": "0",
-			"264": "0",
-		}, nil)
+		env.OnActivity(GetGameScoreActivity, mock.Anything).Return(nil)
 
 		env.ExecuteWorkflow(GameWorkflow, game)
 	}

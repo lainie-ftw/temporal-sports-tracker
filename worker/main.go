@@ -29,10 +29,10 @@ func main() {
 	w.RegisterWorkflow(sports.GameWorkflow)
 
 	// Register activities
-	w.RegisterActivity(sports.GetGames)
-	w.RegisterActivity(sports.StartGameWorkflow)
-	w.RegisterActivity(sports.GetGameScore)
-	w.RegisterActivity(sports.SendNotification)
+	w.RegisterActivity(sports.GetGamesActivity)
+	w.RegisterActivity(sports.StartGameWorkflowActivity)
+	w.RegisterActivity(sports.GetGameScoreActivity)
+	w.RegisterActivity(sports.SendNotificationListActivity)
 
 	// Start worker
 	log.Println("Starting Temporal worker for sports tracker...")

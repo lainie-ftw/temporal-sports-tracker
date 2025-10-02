@@ -2,6 +2,17 @@
 
 A Temporal workflow system that monitors Big Ten college football games and sends Slack notifications when scores change.
 
+## To Build and Run Locally (Docker)
+docker build -f Dockerfile.web .
+docker build -f Dockerfile.worker .
+
+docker run --env-file .env temporal-sports-tracker-worker
+docker run --env-file .env temporal-sports-tracker-web
+
+## To Build and Run Locally (No Docker)
+go run worker/main.go
+go run web/main.go
+
 ## To Do
 - Add real notifications 
 - (?) Add updates pushed to UI with scores

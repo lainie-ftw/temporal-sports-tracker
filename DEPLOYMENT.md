@@ -24,17 +24,31 @@ Both components connect to a Temporal server and can be scaled independently.
 
 ## Quick Start
 
-### 0. Create Kubernetes secret for the Temporal Cloud API key
+### 0. Create Kubernetes secrets 
+
+#### Temporal Cloud API key
 
 ```bash
 kubectl create secret generic temporal-sports-tracker-secrets --from-literal=TEMPORAL_API_KEY=your-api-key-value --namespace temporal-sports-tracker
+```
+
+#### Home Assistant Webhook URL (if used)
+
+```bash
+kubectl create secret generic temporal-sports-tracker-hass-webhook --from-literal=HASS_WEBHOOK_URL=your-web-hook-url --namespace temporal-sports-tracker
+```
+
+#### Slack Webhook URL (if used)
+
+```bash
+kubectl create secret generic temporal-sports-tracker-slack-webhook --from-literal=SLACK_WEBHOOK_URL=your-web-hook-url --namespace temporal-sports-tracker
 ```
 
 ### 1. Build and Push Images
 
 ```bash
 # Build and push to Docker Hub
-./scripts/build-and-push.sh lainieftw/temporal-sports-tracker latest
+./scripts/build-and-push.sh [your-image-repo]/[image name root - rec: temporal-sports-tracker] latest
 ```
 
 ### 2. Update Image References
@@ -43,12 +57,12 @@ Edit the image references in the Kubernetes manifests:
 
 **k8s/web-deployment.yaml:**
 ```yaml
-image: lainieftw/temporal-sports-tracker-web:latest
+image: [your-image-repo]/[image name root]-web:latest
 ```
 
 **k8s/worker-deployment.yaml:**
 ```yaml
-image: lainieftw/temporal-sports-tracker-worker:latest
+image: [your-image-repo]/[image-name-root]-worker:latest
 ```
 
 ### 3. Configure Temporal Connection
@@ -59,6 +73,12 @@ Update `k8s/configmap.yaml` with your Temporal server details:
 data:
   TEMPORAL_HOST: "your-temporal-server:7233"
   TEMPORAL_NAMESPACE: "default"
+```
+Update the NOTIFICATION_TYPES and NOTIFICATION_CHANNELS depending on what types of notification you want (options: underdog,score_change) and what channels you want the notifications to go to (options: logger,slack,hass):
+
+```yaml
+  NOTIFICATION_TYPES: "underdog,score_change" # Comma-separated list, options: underdog,score_change
+  NOTIFICATION_CHANNELS: "logger" # Comma-separated list, options: logger,slack,hass
 ```
 
 ### 4. Deploy to EKS
@@ -126,80 +146,3 @@ kubectl logs -l component=web -f
 # Worker service logs
 kubectl logs -l component=worker -f
 ```
-
-### Access Web UI
-
-```bash
-# Port forward to access locally
-kubectl port-forward svc/temporal-sports-tracker-web-service 8080:80
-
-# Then open http://localhost:8080
-```
-
-### Common Issues
-
-1. **Image Pull Errors**: Ensure ECR repositories exist and images are pushed
-2. **Temporal Connection**: Verify TEMPORAL_HOST in ConfigMap is correct
-3. **Resource Limits**: Adjust resource requests/limits if pods are being evicted
-
-## Scaling
-
-### Manual Scaling
-
-```bash
-# Scale web service
-kubectl scale deployment temporal-sports-tracker-web --replicas=5
-
-# Scale worker service
-kubectl scale deployment temporal-sports-tracker-worker --replicas=3
-```
-
-### Auto-scaling Configuration
-
-Modify the HPA resources in the deployment manifests to adjust scaling behavior:
-
-```yaml
-spec:
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-```
-
-## Production Considerations
-
-1. **Ingress**: Add an Ingress controller to expose the web service externally
-2. **TLS**: Configure TLS certificates for HTTPS
-3. **Monitoring**: Set up Prometheus/Grafana for metrics collection
-4. **Logging**: Configure centralized logging (e.g., ELK stack)
-5. **Secrets**: Use Kubernetes Secrets for sensitive configuration
-6. **Network Policies**: Implement network policies for security
-7. **Resource Quotas**: Set namespace resource quotas
-8. **Backup**: Configure backup strategies for persistent data
-
-## File Structure
-
-```
-├── Dockerfile.web              # Web service container
-├── Dockerfile.worker           # Worker service container
-├── k8s/
-│   ├── configmap.yaml         # Shared configuration
-│   ├── web-deployment.yaml    # Web service, service, and HPA
-│   └── worker-deployment.yaml # Worker deployment and HPA
-├── scripts/
-│   ├── build-and-push.sh      # Build and push images to ECR
-│   └── deploy.sh              # Deploy to EKS
-└── DEPLOYMENT.md              # This file
-```
-
-## Support
-
-For issues related to:
-- **Temporal**: Check Temporal server logs and connection
-- **Kubernetes**: Verify cluster status and resource availability
-- **Application**: Check application logs for specific errors
