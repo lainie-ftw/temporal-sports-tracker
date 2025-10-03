@@ -283,10 +283,6 @@ func (h *Handlers) StartTracking(w http.ResponseWriter, r *http.Request) {
 		ID:        workflowID,
 		TaskQueue: TaskQueueName,
 	}
-	// Start the CollectGamesWorkflow
-
-	//TODO collapse TrackingRequest.Teams and TrackingRequest.Conferences into a single []string of TeamsToTrack
-	//TODO change the CollectGamesWorkflow to accept TeamsToTrack as Teams[] only
 	
 	we, err := h.temporalClient.ExecuteWorkflow(context.Background(), options, sports.CollectGamesWorkflow, req)
 	if err != nil {

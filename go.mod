@@ -7,6 +7,11 @@ require go.temporal.io/sdk v1.26.0
 require github.com/joho/godotenv v1.5.1
 
 require (
+	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/slack-go/slack v0.17.3 // indirect
+)
+
+require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -19,7 +24,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.11.1
 	go.temporal.io/api v1.29.1
 	golang.org/x/exp v0.0.0-20231127185646-65229373498e // indirect
 	golang.org/x/net v0.22.0 // indirect

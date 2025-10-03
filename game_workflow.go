@@ -169,10 +169,15 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 func buildScoreUpdateNotification(game Game) Notification {
 	notification := Notification{}
-	notification.Title = "Score Update!"
 
-	notification.Message = fmt.Sprintf("🏈 Score Update!\n%s vs %s\nScore: %s %s - %s %s", 
-		game.HomeTeam.Name, game.AwayTeam.Name, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID])
+	// Score update notification looks like this:
+		// Score Update!
+		// Michigan Wolverines vs. Ohio State Buckeyes
+		// Score: MICH 100 - OSU 0
+		// Q3, 12:34 left in the quarter on ESPN
+	notification.Title = "Score Update!"
+	notification.Message = fmt.Sprintf("\n%s vs %s\nScore: %s %s - %s %s\nQ%s, %s left in the quarter on %s", 
+		game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID], game.Quarter, game.DisplayClock, game.TVNetwork)
 
 	return notification
 }
@@ -180,12 +185,14 @@ func buildScoreUpdateNotification(game Game) Notification {
 func buildUnderdogNotification(game Game, underdogTeam string) Notification {
 	notification := Notification{}
 	
-	//TODO: add conference, sport, RemainingTime
-	//title := "[update.conference] [update.sport]: Team Chaos!"
+	// Underdog notification looks like this:
+		// Team Chaos!
+		// UCF Knights are winning in the UCF Knights vs. South Florida Bulls game on ESPN! It's currently Q2 with 10:15 left.
+		// Score: UCF 14 - USF 7
 	notification.Title = "Team Chaos!"
 
-	notification.Message = fmt.Sprintf("%s is winning in the %s vs. %s game on %s! It's currently Q%s with [some time] left. \nScore: %s %s - %s %s", 
-		underdogTeam, game.HomeTeam.Name, game.AwayTeam.Name, game.TVNetwork, game.Quarter, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID])
+	notification.Message = fmt.Sprintf("%s are winning in the %s vs. %s game on %s! It's currently Q%s with %s left. \nScore: %s %s - %s %s", 
+		underdogTeam, game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, game.TVNetwork, game.Quarter, game.DisplayClock, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID])
 
 	return notification
 }

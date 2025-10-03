@@ -60,7 +60,7 @@ func GetClientOptions() client.Options {
 		},
 	}
 
-	if TemporalAddress != "localhost:7233" && TemporalAddress != "host.docker.internal:7233"{
+	if TemporalAddress != "localhost:7233" && TemporalAddress != "temporal:7233" {
 		TemporalAPIKey := os.Getenv("TEMPORAL_API_KEY")
 		if TemporalAPIKey == "" {
 			slog.Error("TEMPORAL_API_KEY environment variable is not set")

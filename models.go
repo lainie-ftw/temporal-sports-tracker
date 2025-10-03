@@ -35,7 +35,7 @@ type Competition struct {
 	Competitors []Competitor `json:"competitors"`
 	Odds       []Odd         `json:"odds"`
 	Status     Status        `json:"status"`
-	Broadcasts  []Broadcast   `json:"broadcasts"`
+	Broadcast  string   	 `json:"broadcast"`
 }
 
 type Broadcast struct {
@@ -61,10 +61,10 @@ type Team struct {
 }
 
 type Status struct {
-	Clock       float64 `json:"clock"`
-	DisplayClock string `json:"displayClock"`
-	Period      int    `json:"period"`
-	Type        StatusType `json:"type"`
+	Clock        float64    `json:"clock"`
+	DisplayClock string     `json:"displayClock"`
+	Period       float64    `json:"period"`
+	Type         StatusType `json:"type"`
 }
 
 type StatusType struct {
@@ -102,6 +102,7 @@ type Game struct {
 	Odds         string
 	TVNetwork	string
 	Quarter		string
+	DisplayClock string
 }
 
 // ScoreUpdate represents a score change notification
@@ -114,7 +115,7 @@ type ScoreUpdate struct {
 	UnderdogTeam  string
 	TVNetwork  	  string
 	Quarter	      string
-	RemainingTime string
+	DisplayClock string
 	Timestamp     time.Time
 }
 

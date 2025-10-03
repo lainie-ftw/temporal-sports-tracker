@@ -12,6 +12,8 @@ import (
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
+
+	"github.com/slack-go/slack"
 )
 
 // Start a game workflow
@@ -139,15 +141,19 @@ func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]G
 }
 
 // Helper function to create a Game from a Competition and its Competitors
-func BuildGame(comp Competition, homeTeam, awayTeam Competitor, apiRoot string) Game {
+func BuildGame(comp Competition, homeTeam Competitor, awayTeam Competitor, apiRoot string) Game {
 	game := Game{
-		ID:        comp.ID,
-		StartTime: comp.Date.Time,
-		Status:    comp.Status.Type.State,
-		APIRoot: apiRoot,
+		ID:           comp.ID,
+		StartTime:    comp.Date.Time,
+		Status:       comp.Status.Type.State,
+		APIRoot:      apiRoot,
 		CurrentScore: make(map[string]string),
+		TVNetwork:    comp.Broadcast,
+		DisplayClock: comp.Status.DisplayClock,
 	}
 
+	game.Quarter = fmt.Sprintf("%d", int(comp.Status.Period))
+	
 	// Determine home and away teams
 	if homeTeam.HomeAway == "home" {
 		game.HomeTeam = homeTeam.Team
@@ -170,10 +176,6 @@ func BuildGame(comp Competition, homeTeam, awayTeam Competitor, apiRoot string) 
 		game.AwayTeam.Underdog = comp.Odds[0].AwayTeamOdds.Underdog
 	}
 
-	// Add TV network
-	if len(comp.Broadcasts) > 0 {
-		game.TVNetwork = comp.Broadcasts[0].Name
-	}
 	return game
 }
 
@@ -211,15 +213,13 @@ func GetGameScoreActivity(ctx context.Context, game Game) (map[string]string, er
 				scores[competitor.Team.ID] = competitor.Score
 			}
 			
-			// Update the current quarter
-			if comp.Status.Period > 0 {
-				game.Quarter = fmt.Sprintf("%d", comp.Status.Period)
-			} else {
-				game.Quarter = "0"
+			// Update the current quarter, display clock, and scores in the game object
+			game.Quarter = fmt.Sprintf("%d", int(comp.Status.Period))
+			if comp.Status.DisplayClock != "" {
+				game.DisplayClock = comp.Status.DisplayClock
 			}
-			
 			game.CurrentScore = scores
-			logger.Info("Fetched game score", "gameID", game.ID, "scores", game.CurrentScore)
+			logger.Info("Fetched game score", "gameID", game.ID, "quarter", game.Quarter, "displayClock", game.DisplayClock, "scores", game.CurrentScore)
 			return scores, nil
 		}
 	}
@@ -231,10 +231,9 @@ func SendNotificationListActivity(ctx context.Context, sendNotifications SendNot
 	// For each notification message in the input list, send it to the specified channel in sendNotifications.Channel
 	// NOTE: This means that if one notification in the list fails, the whole activity fails and none of the notifications are sent.
 	// You could also do this with an activity per notification.
+	logger := activity.GetLogger(ctx)
+	logger.Info("Sending notifications to channel", "channel", sendNotifications.Channel)
 	for _, notification := range sendNotifications.NotificationList {
-		logger := activity.GetLogger(ctx)
-		logger.Info("Sending notification", "channel", sendNotifications.Channel, "title", notification.Title, "message", notification.Message)
-
 		// Call the appropriate activity based on the channel
 		switch sendNotifications.Channel {
 		case "slack":
@@ -295,42 +294,33 @@ func SendHomeAssistantNotification(ctx context.Context, notification Notificatio
 }
 
 // SendSlackNotificationActivity sends a notification to Slack
-// TODO: test this
 func SendSlackNotification(ctx context.Context, notification Notification) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Sending Slack notification", "title", notification.Title, "message", notification.Message)
 
-	slackWebhook := os.Getenv("SLACK_WEBHOOK_URL")
-	if slackWebhook == "" {
-		return fmt.Errorf("SLACK_WEBHOOK_URL environment variable is not set")
+	slackBotToken := os.Getenv("SLACK_BOT_TOKEN")
+	if slackBotToken == "" {
+		return fmt.Errorf("SLACK_BOT_TOKEN environment variable is not set")
 	}
 
-	// Build the payload for Slack
-	payload := map[string]string{
-		"text": fmt.Sprintf("*%s*\n%s", notification.Title, notification.Message),
+	slackChannelID := os.Getenv("SLACK_CHANNEL_ID")
+	if slackChannelID == "" {
+		return fmt.Errorf("SLACK_CHANNEL_ID environment variable is not set")
 	}
-	jsonData, err := json.Marshal(payload)
+
+	api := slack.New(slackBotToken)
+	attachment := slack.Attachment{
+		Title: 	notification.Title,
+		Text:   notification.Message,
+		Color:  "#444CE7", //TODO: make this the sports team's color if possible, currently set to Temporal UV
+	}
+
+	_, _, err := api.PostMessage(
+		slackChannelID,
+		slack.MsgOptionAttachments(attachment),
+	)
 	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
+		return fmt.Errorf("failed to send Slack message: %w", err)
 	}
-
-	// Send the POST request to Slack webhook with jsonData payload
-	req, err := http.NewRequest("POST", slackWebhook, io.NopCloser(io.Reader(bytes.NewReader(jsonData))))
-	if err != nil {
-		return fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		return fmt.Errorf("received non-OK response from Slack: %s", resp.Status)
-	}
-
 	return nil
 }

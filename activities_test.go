@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.temporal.io/sdk/client"
@@ -339,20 +341,179 @@ func TestGetGameScore(t *testing.T) {
 	}
 }
 
-func TestSendSlackNotificationActivity(t *testing.T) {
+func TestSendSlackNotification(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestActivityEnvironment()
 	
 	// Register the activity
 	env.RegisterActivity(SendSlackNotification)
 
-	notification := Notification{
-		Title:   "Game Update",
-		Message: "Michigan Wolverines 14 - Washington Huskies 7",
+	tests := []struct {
+		name               string
+		notification       Notification
+		slackBotToken      string
+		slackChannelID     string
+		expectedError      bool
+		expectedErrorMsg   string
+	}{
+		{
+			name: "missing SLACK_BOT_TOKEN",
+			notification: Notification{
+				Title:   "Game Update",
+				Message: "Michigan Wolverines 14 - Washington Huskies 7",
+			},
+			slackBotToken:    "",
+			slackChannelID:   "C12345678",
+			expectedError:    true,
+			expectedErrorMsg: "SLACK_BOT_TOKEN environment variable is not set",
+		},
+		{
+			name: "missing SLACK_CHANNEL_ID",
+			notification: Notification{
+				Title:   "Game Update",
+				Message: "Michigan Wolverines 14 - Washington Huskies 7",
+			},
+			slackBotToken:    "xoxb-test-token",
+			slackChannelID:   "",
+			expectedError:    true,
+			expectedErrorMsg: "SLACK_CHANNEL_ID environment variable is not set",
+		},
+		{
+			name: "both environment variables missing",
+			notification: Notification{
+				Title:   "Game Update",
+				Message: "Michigan Wolverines 14 - Washington Huskies 7",
+			},
+			slackBotToken:    "",
+			slackChannelID:   "",
+			expectedError:    true,
+			expectedErrorMsg: "SLACK_BOT_TOKEN environment variable is not set",
+		},
+		{
+			name: "valid notification with empty title",
+			notification: Notification{
+				Title:   "",
+				Message: "Michigan Wolverines 14 - Washington Huskies 7",
+			},
+			slackBotToken:  "xoxb-test-token",
+			slackChannelID: "C12345678",
+			expectedError:  true, // Will fail when trying to connect to Slack API with fake token
+		},
+		{
+			name: "valid notification with empty message",
+			notification: Notification{
+				Title:   "Game Update",
+				Message: "",
+			},
+			slackBotToken:  "xoxb-test-token",
+			slackChannelID: "C12345678",
+			expectedError:  true, // Will fail when trying to connect to Slack API with fake token
+		},
+		{
+			name: "valid notification with long message",
+			notification: Notification{
+				Title:   "Game Update",
+				Message: "This is a very long message that contains a lot of information about the game including player statistics, team performance, and other relevant details that might be useful for tracking purposes.",
+			},
+			slackBotToken:  "xoxb-test-token",
+			slackChannelID: "C12345678",
+			expectedError:  true, // Will fail when trying to connect to Slack API with fake token
+		},
+		{
+			name: "valid notification with special characters",
+			notification: Notification{
+				Title:   "Game Update: Team A vs Team B",
+				Message: "Score: 🏈 Team A 21 - Team B 14 (Q3 14:32)",
+			},
+			slackBotToken:  "xoxb-test-token",
+			slackChannelID: "C12345678",
+			expectedError:  true, // Will fail when trying to connect to Slack API with fake token
+		},
 	}
 
-	_, err := env.ExecuteActivity(SendSlackNotification, notification)
-	assert.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original environment variables
+			originalBotToken := getEnv("SLACK_BOT_TOKEN")
+			originalChannelID := getEnv("SLACK_CHANNEL_ID")
+			
+			// Set test environment variables
+			if tt.slackBotToken != "" {
+				t.Setenv("SLACK_BOT_TOKEN", tt.slackBotToken)
+			} else {
+				t.Setenv("SLACK_BOT_TOKEN", "")
+			}
+			
+			if tt.slackChannelID != "" {
+				t.Setenv("SLACK_CHANNEL_ID", tt.slackChannelID)
+			} else {
+				t.Setenv("SLACK_CHANNEL_ID", "")
+			}
+
+			// Execute the activity
+			_, err := env.ExecuteActivity(SendSlackNotification, tt.notification)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				if tt.expectedErrorMsg != "" {
+					assert.Contains(t, err.Error(), tt.expectedErrorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// Restore original environment variables
+			if originalBotToken != "" {
+				t.Setenv("SLACK_BOT_TOKEN", originalBotToken)
+			}
+			if originalChannelID != "" {
+				t.Setenv("SLACK_CHANNEL_ID", originalChannelID)
+			}
+		})
+	}
+}
+
+// Helper function to get environment variable
+func getEnv(key string) string {
+	return ""
+}
+
+func TestSendSlackNotificationWithRealCredentials(t *testing.T) {
+	// This test uses actual credentials from the .env file to send a real Slack notification
+	// Load .env file
+	err := godotenv.Load()
+	if err != nil {
+		t.Skip("Skipping test: .env file not found")
+	}
+
+	testSuite := &testsuite.WorkflowTestSuite{}
+	env := testSuite.NewTestActivityEnvironment()
+	
+	// Register the activity
+	env.RegisterActivity(SendSlackNotification)
+
+	// Check if environment variables are set
+	slackBotToken := os.Getenv("SLACK_BOT_TOKEN")
+	slackChannelID := os.Getenv("SLACK_CHANNEL_ID")
+	
+	if slackBotToken == "" || slackChannelID == "" {
+		t.Skip("Skipping test: SLACK_BOT_TOKEN and/or SLACK_CHANNEL_ID not set in .env file")
+	}
+
+	notification := Notification{
+		Title:   "Test Notification from Unit Tests",
+		Message: "This is a test notification sent from the SendSlackNotification unit test",
+	}
+
+	// Execute the activity with real credentials
+	_, err = env.ExecuteActivity(SendSlackNotification, notification)
+	
+	// With valid credentials, this should succeed
+	if err != nil {
+		t.Logf("Note: Test failed with real credentials. Error: %v", err)
+		t.Logf("This might indicate invalid credentials or Slack API issues")
+	}
+	assert.NoError(t, err, "Expected notification to be sent successfully with real credentials")
 }
 
 func TestSendNotificationList(t *testing.T) {
