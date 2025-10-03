@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: worker
-        image: lainieftw/temporal-sports-tracker-worker:latest
+        image: lainieftw/temporal-sports-tracker-worker:1.0
         env:
         - name: TEMPORAL_API_KEY
           valueFrom:
@@ -34,11 +34,11 @@ spec:
 #              name: temporal-sports-tracker-hass-webhook
 #              key: HASS_WEBHOOK_URL
         # Slack Webhook URL, if used
-#        - name: SLACK_WEBHOOK_URL
-#          valueFrom:
-#            secretKeyRef:
-#              name: temporal-sports-tracker-slack-webhook
-#              key: SLACK_WEBHOOK_URL
+        - name: SLACK_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: temporal-sports-tracker-slack-bot-token
+              key: SLACK_BOT_TOKEN
         envFrom:
         - configMapRef:
             name: temporal-sports-tracker-config

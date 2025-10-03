@@ -38,10 +38,10 @@ kubectl create secret generic temporal-sports-tracker-secrets --from-literal=TEM
 kubectl create secret generic temporal-sports-tracker-hass-webhook --from-literal=HASS_WEBHOOK_URL=your-web-hook-url --namespace temporal-sports-tracker
 ```
 
-#### Slack Webhook URL (if used)
+#### Slack Bot Token (if used)
 
 ```bash
-kubectl create secret generic temporal-sports-tracker-slack-webhook --from-literal=SLACK_WEBHOOK_URL=your-web-hook-url --namespace temporal-sports-tracker
+kubectl create secret generic temporal-sports-tracker-slack-bot-token --from-literal=SLACK_BOT_TOKEN=your-web-hook-url --namespace temporal-sports-tracker
 ```
 
 ### 1. Build and Push Images
