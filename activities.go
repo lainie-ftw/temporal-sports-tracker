@@ -180,27 +180,28 @@ func BuildGame(comp Competition, homeTeam Competitor, awayTeam Competitor, apiRo
 }
 
 // FetchGameScoreActivity fetches current score for a specific game
-func GetGameScoreActivity(ctx context.Context, game Game) (map[string]string, error) {
+func GetGameScoreActivity(ctx context.Context, game Game) (Game, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Fetching game score", "gameID", game.ID)
-
+	
+	var gameUpdate Game
 	url := game.APIRoot + "/scoreboard"
 //	url := fmt.Sprintf("%s/summary?event=%s", game.APIRoot, game.ID) //Example: https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=:gameId
 	
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch game score: %w", err)
+		return gameUpdate, fmt.Errorf("failed to fetch game score: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return gameUpdate, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var espnResp ESPNResponse
 	if err := json.Unmarshal(body, &espnResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ESPN response: %w", err)
+		return gameUpdate, fmt.Errorf("failed to unmarshal ESPN response: %w", err)
 	}
 
 	// Find the specific game
@@ -214,17 +215,17 @@ func GetGameScoreActivity(ctx context.Context, game Game) (map[string]string, er
 			}
 			
 			// Update the current quarter, display clock, and scores in the game object
-			game.Quarter = fmt.Sprintf("%d", int(comp.Status.Period))
+			gameUpdate.Quarter = fmt.Sprintf("%d", int(comp.Status.Period))
 			if comp.Status.DisplayClock != "" {
-				game.DisplayClock = comp.Status.DisplayClock
+				gameUpdate.DisplayClock = comp.Status.DisplayClock
 			}
-			game.CurrentScore = scores
-			logger.Info("Fetched game score", "gameID", game.ID, "quarter", game.Quarter, "displayClock", game.DisplayClock, "scores", game.CurrentScore)
-			return scores, nil
+			gameUpdate.CurrentScore = scores
+			logger.Info("Fetched game score", "gameID", game.ID, "quarter", gameUpdate.Quarter, "displayClock", gameUpdate.DisplayClock, "scores", gameUpdate.CurrentScore)
+			return gameUpdate, nil
 		}
 	}
 
-	return nil, fmt.Errorf("game not found: %s", game.ID)
+	return gameUpdate, fmt.Errorf("game not found: %s", game.ID)
 }
 
 func SendNotificationListActivity(ctx context.Context, sendNotifications SendNotifications) error {

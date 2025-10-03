@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	//"strconv"
 	"strings"
 	"time"
 
@@ -70,13 +71,17 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 		notificationChannels = strings.Split(notificationChannelsStr, ",")
 	}
 
-	underdogWinning := false
-
 	// Initialize score tracking
 	lastScores := make(map[string]string)
 	for teamID, score := range game.CurrentScore {
 		lastScores[teamID] = score
 	}
+
+	// Initialize underdog tracking
+	underdogWinning := false
+
+	// Initialize overtime tracking
+	//lastOvertimeQuarter := 4 // Regular time quarters are 1-4, overtime is 5 and above
 
 	// Monitor the game for 5 hours after start time - could be modified to check for the game status instead
 	for workflow.Now(ctx).Before(game.StartTime.Add(5 * time.Hour)) {
@@ -88,14 +93,19 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 		})
 		selector.Select(ctx)
 
-		var currentScores map[string]string
-		err := workflow.ExecuteActivity(ctx, GetGameScoreActivity, game).Get(ctx, &currentScores)
+		//var currentScores map[string]string
+		var gameUpdate Game
+		err := workflow.ExecuteActivity(ctx, GetGameScoreActivity, game).Get(ctx, &gameUpdate)
 		if err != nil {
 			logger.Error("Failed to fetch game score", "gameID", game.ID, "error", err)
 			continue
 		}
 
-		game.CurrentScore = currentScores
+		game.CurrentScore = gameUpdate.CurrentScore
+		game.Quarter = gameUpdate.Quarter
+		game.DisplayClock = gameUpdate.DisplayClock
+
+		//notificationList := []Notification{}
 
 		// Check for score changes
 		scoreChanged := false
@@ -105,6 +115,39 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 				break
 			}
 		}
+
+		//if slices.Contains(notificationTypes, "overtime") {
+
+		//}
+		// Check for overtime start
+		//if game.Quarter != "" {
+	//		currentQuarter, err := strconv.Atoi(game.Quarter)
+	//		if err == nil && currentQuarter > lastOvertimeQuarter {
+	//			// A new overtime has started
+	//			if slices.Contains(notificationTypes, "overtime") {
+	//				overtimeNotification := Notification{
+	//					Title:   "Overtime Alert!",
+	//					Message: fmt.Sprintf("The game between %s and %s has gone into overtime! It's currently Q%s with %s left on %s.", game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, game.Quarter, game.DisplayClock, game.TVNetwork),
+	//				}
+	//				// Send overtime notification to all channels
+	//				for channel := range notificationChannels {
+	//					sendNotifications := SendNotifications{
+	//						Channel:          notificationChannels[channel],
+	//						NotificationList: []Notification{overtimeNotification},
+	//					}
+
+	//					err = workflow.ExecuteActivity(ctx, SendNotificationListActivity, sendNotifications).Get(ctx, nil)
+//
+//						if err != nil {
+//							logger.Error("Failed to send overtime notification", "gameID", game.ID, "error", err)
+//						}
+//					}
+//				}
+//			}
+//			if currentQuarter > 4 {
+//				lastOvertimeQuarter = currentQuarter
+//			}
+//		}
 
 		// Send notification if score changed
 		if scoreChanged {
