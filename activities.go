@@ -91,7 +91,7 @@ func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]G
 					logger.Info("Home Team name", "name", homeTeam.Team.Name)
 					logger.Info("Away Team name", "name", awayTeam.Team.Name)
 
-					game := BuildGame(comp, homeTeam, awayTeam, apiRoot)
+					game := BuildGame(comp, homeTeam, awayTeam, apiRoot, trackingRequest)
 					games = append(games, game)
 				}
 			}
@@ -129,7 +129,7 @@ func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]G
 				// Filter games by teams in the request
 				if slices.Contains(trackingRequest.Teams, homeTeam.Team.ID) ||
 					slices.Contains(trackingRequest.Teams, awayTeam.Team.ID) {
-					game := BuildGame(comp, homeTeam, awayTeam, apiRoot)
+					game := BuildGame(comp, homeTeam, awayTeam, apiRoot, trackingRequest)
 					games = append(games, game)
 				}
 			}
@@ -141,18 +141,21 @@ func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]G
 }
 
 // Helper function to create a Game from a Competition and its Competitors
-func BuildGame(comp Competition, homeTeam Competitor, awayTeam Competitor, apiRoot string) Game {
+func BuildGame(comp Competition, homeTeam Competitor, awayTeam Competitor, apiRoot string, request TrackingRequest) Game {
 	game := Game{
 		ID:           comp.ID,
+		Sport: 	 	  request.Sport,
+		League: 	  request.League,
 		StartTime:    comp.Date.Time,
 		Status:       comp.Status.Type.State,
 		APIRoot:      apiRoot,
 		CurrentScore: make(map[string]string),
 		TVNetwork:    comp.Broadcast,
 		DisplayClock: comp.Status.DisplayClock,
+		NumberOfPeriods: comp.Format.Regulation.NumberOfPeriods,
 	}
 
-	game.Quarter = fmt.Sprintf("%d", int(comp.Status.Period))
+	game.CurrentPeriod = fmt.Sprintf("%d", int(comp.Status.Period))
 	
 	// Determine home and away teams
 	if homeTeam.HomeAway == "home" {
@@ -215,12 +218,12 @@ func GetGameScoreActivity(ctx context.Context, game Game) (Game, error) {
 			}
 			
 			// Update the current quarter, display clock, and scores in the game object
-			gameUpdate.Quarter = fmt.Sprintf("%d", int(comp.Status.Period))
+			gameUpdate.CurrentPeriod = fmt.Sprintf("%d", int(comp.Status.Period))
 			if comp.Status.DisplayClock != "" {
 				gameUpdate.DisplayClock = comp.Status.DisplayClock
 			}
 			gameUpdate.CurrentScore = scores
-			logger.Info("Fetched game score", "gameID", game.ID, "quarter", gameUpdate.Quarter, "displayClock", gameUpdate.DisplayClock, "scores", gameUpdate.CurrentScore)
+			logger.Info("Fetched game score", "gameID", game.ID, "period", gameUpdate.CurrentPeriod, "displayClock", gameUpdate.DisplayClock, "scores", gameUpdate.CurrentScore)
 			return gameUpdate, nil
 		}
 	}

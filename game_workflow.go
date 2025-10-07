@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	//"strconv"
+	"strconv"
 	"strings"
 	"time"
 
@@ -80,8 +80,8 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 	// Initialize underdog tracking
 	underdogWinning := false
 
-	// Initialize overtime tracking
-	//lastOvertimeQuarter := 4 // Regular time quarters are 1-4, overtime is 5 and above
+	// Initialize overtime tracking to the number of regulation periods in the game
+	lastOvertimePeriod := game.NumberOfPeriods
 
 	// Monitor the game for 5 hours after start time - could be modified to check for the game status instead
 	for workflow.Now(ctx).Before(game.StartTime.Add(5 * time.Hour)) {
@@ -93,7 +93,6 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 		})
 		selector.Select(ctx)
 
-		//var currentScores map[string]string
 		var gameUpdate Game
 		err := workflow.ExecuteActivity(ctx, GetGameScoreActivity, game).Get(ctx, &gameUpdate)
 		if err != nil {
@@ -102,10 +101,8 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 		}
 
 		game.CurrentScore = gameUpdate.CurrentScore
-		game.Quarter = gameUpdate.Quarter
+		game.CurrentPeriod = gameUpdate.CurrentPeriod
 		game.DisplayClock = gameUpdate.DisplayClock
-
-		//notificationList := []Notification{}
 
 		// Check for score changes
 		scoreChanged := false
@@ -116,43 +113,19 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 			}
 		}
 
-		//if slices.Contains(notificationTypes, "overtime") {
+		// Check for a new overtime
+		newOvertime := false
+		if game.CurrentPeriod != "" {
+			currentPeriod, err := strconv.Atoi(game.CurrentPeriod)
+			if err == nil && currentPeriod > lastOvertimePeriod {
+				newOvertime = true
+			}
+		}
 
-		//}
-		// Check for overtime start
-		//if game.Quarter != "" {
-	//		currentQuarter, err := strconv.Atoi(game.Quarter)
-	//		if err == nil && currentQuarter > lastOvertimeQuarter {
-	//			// A new overtime has started
-	//			if slices.Contains(notificationTypes, "overtime") {
-	//				overtimeNotification := Notification{
-	//					Title:   "Overtime Alert!",
-	//					Message: fmt.Sprintf("The game between %s and %s has gone into overtime! It's currently Q%s with %s left on %s.", game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, game.Quarter, game.DisplayClock, game.TVNetwork),
-	//				}
-	//				// Send overtime notification to all channels
-	//				for channel := range notificationChannels {
-	//					sendNotifications := SendNotifications{
-	//						Channel:          notificationChannels[channel],
-	//						NotificationList: []Notification{overtimeNotification},
-	//					}
+		notificationList := []Notification{}
 
-	//					err = workflow.ExecuteActivity(ctx, SendNotificationListActivity, sendNotifications).Get(ctx, nil)
-//
-//						if err != nil {
-//							logger.Error("Failed to send overtime notification", "gameID", game.ID, "error", err)
-//						}
-//					}
-//				}
-//			}
-//			if currentQuarter > 4 {
-//				lastOvertimeQuarter = currentQuarter
-//			}
-//		}
-
-		// Send notification if score changed
-		if scoreChanged {
-
-			notificationList := []Notification{}
+		// Send notifications related to score changes if the score changed
+		if scoreChanged  {
 
 			if slices.Contains(notificationTypes, "score_change") {
 				scoreUpdateNotification := buildScoreUpdateNotification(game)
@@ -164,13 +137,13 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 				logger.Info("NotificationTypes contains underdog. Checking for underdog status", "gameID", game.ID)
 				// We only want to send a notification when the underdog pulls ahead
 				underdogTeam := determineUnderdog(game)
-				if !underdogWinning {
-					if underdogTeam != "No underdog." {
-						if game.CurrentScore[game.HomeTeam.ID] > game.CurrentScore[game.AwayTeam.ID] && game.HomeTeam.Underdog {
-							underdogWinning = true
-						} else if game.CurrentScore[game.AwayTeam.ID] > game.CurrentScore[game.HomeTeam.ID] && game.AwayTeam.Underdog {
-							underdogWinning = true
-						}
+				if underdogTeam != "No underdog." {
+					if game.CurrentScore[game.HomeTeam.ID] > game.CurrentScore[game.AwayTeam.ID] && game.HomeTeam.Underdog {
+						underdogWinning = true
+					} else if game.CurrentScore[game.AwayTeam.ID] > game.CurrentScore[game.HomeTeam.ID] && game.AwayTeam.Underdog {
+						underdogWinning = true
+					} else {
+						underdogWinning = false
 					}
 				}
 
@@ -182,8 +155,30 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 			}
 
 			logger.Info("Score change detected", "gameID", game.ID)
-			logger.Info("Notifications to send", "count", len(notificationList), "notifications", notificationList)
 
+			// Update last scores - maybe move this so it only updates if the notifications are sent successfully?
+			for teamID, score := range game.CurrentScore {
+				lastScores[teamID] = score
+			}
+		}
+
+		// Send overtime notification if the game has gone into a new overtime period
+		if newOvertime && slices.Contains(notificationTypes, "overtime") {
+			overtimeNotification := buildOvertimeNotification(game)
+			notificationList = append(notificationList, overtimeNotification)
+			logger.Info("Added overtime notification", "gameID", game.ID)
+			
+			// Update last overtime period
+			currentPeriod, err := strconv.Atoi(game.CurrentPeriod)
+			if err == nil {
+				lastOvertimePeriod = currentPeriod
+			}
+		}
+
+		// If there are notifications to send, send them
+		if len(notificationList) > 0 {
+			logger.Info("Notifications to send", "count", len(notificationList), "notifications", notificationList)
+			
 			// For each notification channel, send the collected list of notifications:
 			for channel := range notificationChannels {
 				sendNotifications := SendNotifications{
@@ -191,16 +186,10 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 					NotificationList: notificationList,
 				}
 		
-				err = workflow.ExecuteActivity(ctx, SendNotificationListActivity, sendNotifications).Get(ctx, nil)
-		
+				err = workflow.ExecuteActivity(ctx, SendNotificationListActivity, sendNotifications).Get(ctx, nil)		
 				if err != nil {
 					logger.Error("Failed to send notification", "gameID", game.ID, "error", err)
 				}
-			}
-
-			// Update last scores
-			for teamID, score := range game.CurrentScore {
-				lastScores[teamID] = score
 			}
 		}
 	}
@@ -212,20 +201,22 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 func buildScoreUpdateNotification(game Game) Notification {
 	notification := Notification{}
+	periodString := getPeriodStr(game.NumberOfPeriods, game.Sport)
 
 	// Score update notification looks like this:
 		// Score Update!
 		// Michigan Wolverines vs. Ohio State Buckeyes
 		// Score: MICH 100 - OSU 0
-		// Q3, 12:34 left in the quarter on ESPN
+		// Q3, 12:34 left on ESPN
 	notification.Title = "Score Update!"
-	notification.Message = fmt.Sprintf("\n%s vs %s\nScore: %s %s - %s %s\nQ%s, %s left in the quarter on %s", 
-		game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID], game.Quarter, game.DisplayClock, game.TVNetwork)
+	notification.Message = fmt.Sprintf("\n%s vs %s\nScore: %s %s - %s %s\n%s, %s left on %s", 
+		game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID], periodString, game.DisplayClock, game.TVNetwork)
 
 	return notification
 }
 
 func buildUnderdogNotification(game Game, underdogTeam string) Notification {
+	periodString := getPeriodStr(game.NumberOfPeriods, game.Sport)
 	notification := Notification{}
 	
 	// Underdog notification looks like this:
@@ -234,10 +225,68 @@ func buildUnderdogNotification(game Game, underdogTeam string) Notification {
 		// Score: UCF 14 - USF 7
 	notification.Title = "Team Chaos!"
 
-	notification.Message = fmt.Sprintf("%s are winning in the %s vs. %s game on %s! It's currently Q%s with %s left. \nScore: %s %s - %s %s", 
-		underdogTeam, game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, game.TVNetwork, game.Quarter, game.DisplayClock, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID])
+	notification.Message = fmt.Sprintf("%s are winning in the %s vs. %s game on %s! It's currently %s with %s left. \nScore: %s %s - %s %s", 
+		underdogTeam, game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, game.TVNetwork, periodString, game.DisplayClock, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID])
 
 	return notification
+}
+
+func buildOvertimeNotification(game Game) Notification {
+	notification := Notification{}
+
+	currentPeriod, err := strconv.Atoi(game.CurrentPeriod)
+
+	if err != nil {
+		// If we can't parse the current period, just return a generic notification
+		notification.Title = "Overtime!"
+		notification.Message = fmt.Sprintf("The game between the %s and the %s is in overtime on %s!\nScore: %s %s - %s %s", 
+			game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, game.TVNetwork, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID])
+		return notification
+	}
+
+	//Calculate which overtime we're in - current period minus number of periods for this game.
+	overtimeNumber := currentPeriod - game.NumberOfPeriods
+	overtimeStr := ""
+	switch overtimeNumber {
+		case 1:
+			overtimeStr = "OT"
+		case 2:
+			overtimeStr = "Double OT"
+		case 3:
+			overtimeStr = "TRIPLE OT"
+		default:
+			overtimeStr = fmt.Sprintf("%dth OT", overtimeNumber)
+	}
+
+	// Overtime notification looks like this:
+		// Double OT!
+		// The game between the Michigan Wolverines and the Ohio State Buckeyes is in Double OT on NBC!
+		// Score: MICH 27 - OSU 27
+	notification.Title = fmt.Sprintf("%s!", overtimeStr)
+
+	notification.Message = fmt.Sprintf("The game between the %s and the %s is in %s on %s!\nScore: %s %s - %s %s", 
+		game.HomeTeam.DisplayName, game.AwayTeam.DisplayName, overtimeStr, game.TVNetwork, game.HomeTeam.Abbreviation, game.CurrentScore[game.HomeTeam.ID], game.AwayTeam.Abbreviation, game.CurrentScore[game.AwayTeam.ID])
+
+	return notification
+}
+
+func getPeriodStr(period int, sport string) string {
+	switch sport {
+	case "baseball":
+		return fmt.Sprintf("Inning %d", period)
+	case "hockey":
+		switch period {
+		case 1:
+			return "1st Period"
+		case 2:
+			return "2nd Period"
+		case 3:
+			return "3rd Period"
+		}
+	case "soccer":
+		return fmt.Sprintf("Half %d", period)	
+	}
+	return fmt.Sprintf("Q%d", period) // default to quarters for other sports
 }
 
 func determineUnderdog(game Game) (string) {

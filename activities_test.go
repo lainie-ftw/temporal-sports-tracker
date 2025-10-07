@@ -332,7 +332,7 @@ func TestGetGameScore(t *testing.T) {
 				// The activity modifies the game object directly
 				assert.NotNil(t, tt.game.CurrentScore)
 				if tt.name == "successful score fetch" {
-					assert.Equal(t, "2", tt.game.Quarter)
+					assert.Equal(t, "2", tt.game.CurrentPeriod)
 					assert.Contains(t, tt.game.CurrentScore, "130")
 					assert.Contains(t, tt.game.CurrentScore, "264")
 				}
