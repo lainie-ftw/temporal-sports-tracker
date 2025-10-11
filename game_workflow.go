@@ -138,9 +138,22 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 				// We only want to send a notification when the underdog pulls ahead
 				underdogTeam := determineUnderdog(game)
 				if underdogTeam != "No underdog." {
-					if game.CurrentScore[game.HomeTeam.ID] > game.CurrentScore[game.AwayTeam.ID] && game.HomeTeam.Underdog {
+					var homeTeamScore int
+					var awayTeamScore int
+					var err error
+					homeTeamScore, err = strconv.Atoi(game.CurrentScore[game.HomeTeam.ID])
+					if err != nil {
+						logger.Error("Failed to parse home team score", "gameID", game.ID, "score", game.CurrentScore[game.HomeTeam.ID], "error", err)
+						homeTeamScore = 0
+					}
+					awayTeamScore, err = strconv.Atoi(game.CurrentScore[game.AwayTeam.ID])
+					if err != nil {
+						logger.Error("Failed to parse away team score", "gameID", game.ID, "score", game.CurrentScore[game.AwayTeam.ID], "error", err)
+						awayTeamScore = 0
+					}
+					if game.HomeTeam.Underdog && (homeTeamScore > awayTeamScore) {
 						underdogWinning = true
-					} else if game.CurrentScore[game.AwayTeam.ID] > game.CurrentScore[game.HomeTeam.ID] && game.AwayTeam.Underdog {
+					} else if game.AwayTeam.Underdog && (awayTeamScore > homeTeamScore) {
 						underdogWinning = true
 					} else {
 						underdogWinning = false
