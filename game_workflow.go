@@ -134,7 +134,7 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 			}
 
 			if slices.Contains(notificationTypes, "underdog") {
-				logger.Info("NotificationTypes contains underdog. Checking for underdog status", "gameID", game.ID)
+				logger.Info("NotificationTypes contains underdog. Checking for underdog status", "gameID", game.ID, "underdogWinning", underdogWinning)
 				// We only want to send a notification when the underdog pulls ahead
 				underdogTeam := determineUnderdog(game)
 				if underdogTeam != "No underdog." {
@@ -151,12 +151,16 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 						logger.Error("Failed to parse away team score", "gameID", game.ID, "score", game.CurrentScore[game.AwayTeam.ID], "error", err)
 						awayTeamScore = 0
 					}
+
 					if game.HomeTeam.Underdog && (homeTeamScore > awayTeamScore) {
 						underdogWinning = true
+						logger.Info("Home team is underdog and winning", "gameID", game.ID, "homeTeam", game.HomeTeam.DisplayName, "homeTeamScore", homeTeamScore, "awayTeam", game.AwayTeam.DisplayName, "awayTeamScore", awayTeamScore)	
 					} else if game.AwayTeam.Underdog && (awayTeamScore > homeTeamScore) {
 						underdogWinning = true
+						logger.Info("Away team is underdog and winning", "gameID", game.ID, "homeTeam", game.HomeTeam.DisplayName, "homeTeamScore", homeTeamScore, "awayTeam", game.AwayTeam.DisplayName, "awayTeamScore", awayTeamScore)
 					} else {
 						underdogWinning = false
+						logger.Info("Underdog is not winning", "gameID", game.ID, "homeTeam", game.HomeTeam.DisplayName, "homeTeamScore", homeTeamScore, "awayTeam", game.AwayTeam.DisplayName, "awayTeamScore", awayTeamScore)
 					}
 				}
 
@@ -214,7 +218,7 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 func buildScoreUpdateNotification(game Game) Notification {
 	notification := Notification{}
-	periodString := getPeriodStr(game.NumberOfPeriods, game.Sport)
+	periodString := getPeriodStr(game.CurrentPeriod, game.Sport)
 
 	// Score update notification looks like this:
 		// Score Update!
@@ -229,7 +233,7 @@ func buildScoreUpdateNotification(game Game) Notification {
 }
 
 func buildUnderdogNotification(game Game, underdogTeam string) Notification {
-	periodString := getPeriodStr(game.NumberOfPeriods, game.Sport)
+	periodString := getPeriodStr(game.CurrentPeriod, game.Sport)
 	notification := Notification{}
 	
 	// Underdog notification looks like this:
@@ -283,17 +287,17 @@ func buildOvertimeNotification(game Game) Notification {
 	return notification
 }
 
-func getPeriodStr(period int, sport string) string {
+func getPeriodStr(period string, sport string) string {
 	switch sport {
 	case "baseball":
 		return fmt.Sprintf("Inning %d", period)
 	case "hockey":
 		switch period {
-		case 1:
+		case "1":
 			return "1st Period"
-		case 2:
+		case "2":
 			return "2nd Period"
-		case 3:
+		case "3":
 			return "3rd Period"
 		}
 	case "soccer":
