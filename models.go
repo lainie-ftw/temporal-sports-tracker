@@ -111,6 +111,7 @@ type Game struct {
 	Status       string
 	APIRoot      string // Base URL for the sport/league, e.g. "https://site.api.espn.com/apis/site/v2/sports/football/college-football"
 	Odds         string
+	UnderdogWinning bool
 	TVNetwork	string
 	CurrentPeriod		string
 	NumberOfPeriods int

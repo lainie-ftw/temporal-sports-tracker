@@ -77,9 +77,6 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 		lastScores[teamID] = score
 	}
 
-	// Initialize underdog tracking
-	underdogWinning := false
-
 	// Initialize overtime tracking to the number of regulation periods in the game
 	lastOvertimePeriod := game.NumberOfPeriods
 
@@ -134,9 +131,11 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 			}
 
 			if slices.Contains(notificationTypes, "underdog") {
-				logger.Info("NotificationTypes contains underdog. Checking for underdog status", "gameID", game.ID, "underdogWinning", underdogWinning)
+				logger.Info("NotificationTypes contains underdog. Checking for underdog status", "gameID", game.ID, "underdogWinning", game.UnderdogWinning)
 				// We only want to send a notification when the underdog pulls ahead
 				underdogTeam := determineUnderdog(game)
+				wasUnderdogWinning := game.UnderdogWinning
+
 				if underdogTeam != "No underdog." {
 					var homeTeamScore int
 					var awayTeamScore int
@@ -153,21 +152,22 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 					}
 
 					if game.HomeTeam.Underdog && (homeTeamScore > awayTeamScore) {
-						underdogWinning = true
+						game.UnderdogWinning = true
 						logger.Info("Home team is underdog and winning", "gameID", game.ID, "homeTeam", game.HomeTeam.DisplayName, "homeTeamScore", homeTeamScore, "awayTeam", game.AwayTeam.DisplayName, "awayTeamScore", awayTeamScore)	
 					} else if game.AwayTeam.Underdog && (awayTeamScore > homeTeamScore) {
-						underdogWinning = true
+						game.UnderdogWinning = true
 						logger.Info("Away team is underdog and winning", "gameID", game.ID, "homeTeam", game.HomeTeam.DisplayName, "homeTeamScore", homeTeamScore, "awayTeam", game.AwayTeam.DisplayName, "awayTeamScore", awayTeamScore)
 					} else {
-						underdogWinning = false
+						game.UnderdogWinning = false
 						logger.Info("Underdog is not winning", "gameID", game.ID, "homeTeam", game.HomeTeam.DisplayName, "homeTeamScore", homeTeamScore, "awayTeam", game.AwayTeam.DisplayName, "awayTeamScore", awayTeamScore)
 					}
-				}
 
-				if underdogWinning {
-					underdogNotification := buildUnderdogNotification(game, underdogTeam)
-					notificationList = append(notificationList, underdogNotification)
-					logger.Info("Added underdog notification", "gameID", game.ID)
+					// If the underdog was not previously winning but now is winning, send a notification (only send notification if underdog pulls ahead)
+					if !wasUnderdogWinning && game.UnderdogWinning {
+						underdogNotification := buildUnderdogNotification(game, underdogTeam)
+						notificationList = append(notificationList, underdogNotification)
+						logger.Info("Added underdog notification", "gameID", game.ID)
+					}
 				}
 			}
 
@@ -290,7 +290,7 @@ func buildOvertimeNotification(game Game) Notification {
 func getPeriodStr(period string, sport string) string {
 	switch sport {
 	case "baseball":
-		return fmt.Sprintf("Inning %d", period)
+		return fmt.Sprintf("Inning %s", period)
 	case "hockey":
 		switch period {
 		case "1":
@@ -301,9 +301,9 @@ func getPeriodStr(period string, sport string) string {
 			return "3rd Period"
 		}
 	case "soccer":
-		return fmt.Sprintf("Half %d", period)	
+		return fmt.Sprintf("Half %s", period)	
 	}
-	return fmt.Sprintf("Q%d", period) // default to quarters for other sports
+	return fmt.Sprintf("Q%s", period) // default to quarters for other sports
 }
 
 func determineUnderdog(game Game) (string) {
