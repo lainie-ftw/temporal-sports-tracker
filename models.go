@@ -36,6 +36,15 @@ type Competition struct {
 	Odds       []Odd         `json:"odds"`
 	Status     Status        `json:"status"`
 	Broadcast  string   	 `json:"broadcast"`
+	Format     Format	   	 `json:"format"`
+}
+
+type Format struct {
+	Regulation Regulation `json:"regulation"`
+}
+
+type Regulation struct {
+	NumberOfPeriods int `json:"periods"`
 }
 
 type Broadcast struct {
@@ -93,6 +102,8 @@ type TeamOdds struct {
 // Game represents a simplified game structure for our workflow
 type Game struct {
 	ID           string
+	Sport		string
+	League		string
 	HomeTeam     Team
 	AwayTeam     Team
 	StartTime    time.Time
@@ -100,8 +111,10 @@ type Game struct {
 	Status       string
 	APIRoot      string // Base URL for the sport/league, e.g. "https://site.api.espn.com/apis/site/v2/sports/football/college-football"
 	Odds         string
+	UnderdogWinning bool
 	TVNetwork	string
-	Quarter		string
+	CurrentPeriod		string
+	NumberOfPeriods int
 	DisplayClock string
 }
 
