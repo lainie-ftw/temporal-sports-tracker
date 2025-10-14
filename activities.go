@@ -153,6 +153,7 @@ func BuildGame(comp Competition, homeTeam Competitor, awayTeam Competitor, apiRo
 		TVNetwork:    comp.Broadcast,
 		DisplayClock: comp.Status.DisplayClock,
 		NumberOfPeriods: comp.Format.Regulation.NumberOfPeriods,
+		UnderdogWinning: false,
 	}
 
 	game.CurrentPeriod = fmt.Sprintf("%d", int(comp.Status.Period))
