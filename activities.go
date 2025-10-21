@@ -183,7 +183,7 @@ func BuildGame(comp Competition, homeTeam Competitor, awayTeam Competitor, apiRo
 	return game
 }
 
-// FetchGameScoreActivity fetches current score for a specific game
+// GetGameScoreActivity fetches current score for a specific game
 func GetGameScoreActivity(ctx context.Context, game Game) (Game, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Fetching game score", "gameID", game.ID)
@@ -317,7 +317,7 @@ func SendSlackNotification(ctx context.Context, notification Notification) error
 	attachment := slack.Attachment{
 		Title: 	notification.Title,
 		Text:   notification.Message,
-		Color:  "#444CE7", //TODO: make this the sports team's color if possible, currently set to Temporal UV
+		Color:  "#444CE7", // Temporal UV
 	}
 
 	_, _, err := api.PostMessage(

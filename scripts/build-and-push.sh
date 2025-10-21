@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build and push Docker images to ECR
+# Build and push Docker images
 # Usage: ./scripts/build-and-push.sh <ecr-repo-base-url> [tag]
 
 set -e

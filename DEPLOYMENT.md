@@ -1,6 +1,6 @@
-# EKS Deployment Guide for Temporal Sports Tracker
+# Docker and/or K8s Deployment Guide for Temporal Sports Tracker
 
-This guide explains how to deploy the Temporal Sports Tracker application to Amazon EKS using the provided Docker containers and Kubernetes manifests.
+This guide explains how to deploy the Temporal Sports Tracker application to a K8s cluster using the provided Docker containers and Kubernetes manifests.
 
 ## Architecture Overview
 
@@ -13,20 +13,19 @@ Both components connect to a Temporal server and can be scaled independently.
 
 ## Prerequisites
 
-1. **AWS CLI** configured with appropriate permissions
-2. **kubectl** configured to connect to your EKS cluster
-3. `temporal-sports-tracker` namespace in your EKS cluster
+1. **kubectl** configured to connect to your K8s cluster
+2. `temporal-sports-tracker` namespace in your K8s cluster
 3. **Docker** installed for building images
-4. **ECR repositories** created for both images:
-   - `your-account.dkr.ecr.region.amazonaws.com/temporal-sports-tracker-web`
-   - `your-account.dkr.ecr.region.amazonaws.com/temporal-sports-tracker-worker`
-5. **Temporal server** running (either in-cluster or external)
+4. **Image repositories** created for both images (the build-and-push.sh script assumes Docker Hub):
+   - `your-image-repo-url/temporal-sports-tracker-web`
+   - `your-image-repo-url/temporal-sports-tracker-worker`
+5. **Temporal server** running (either in-cluster or Cloud)
 
 ## Quick Start
 
 ### 0. Create Kubernetes secrets 
 
-#### Temporal Cloud API key
+#### Temporal Cloud API key (if using Temporal Cloud)
 
 ```bash
 kubectl create secret generic temporal-sports-tracker-secrets --from-literal=TEMPORAL_API_KEY=your-api-key-value --namespace temporal-sports-tracker
@@ -41,14 +40,14 @@ kubectl create secret generic temporal-sports-tracker-hass-webhook --from-litera
 #### Slack Bot Token (if used)
 
 ```bash
-kubectl create secret generic temporal-sports-tracker-slack-bot-token --from-literal=SLACK_BOT_TOKEN=your-web-hook-url --namespace temporal-sports-tracker
+kubectl create secret generic temporal-sports-tracker-slack-bot-token --from-literal=SLACK_BOT_TOKEN=your-bot-token --namespace temporal-sports-tracker
 ```
 
 ### 1. Build and Push Images
 
 ```bash
 # Build and push to Docker Hub
-./scripts/build-and-push.sh [your-image-repo]/[image name root - rec: temporal-sports-tracker] latest
+./scripts/build-and-push.sh [your-image-repo]/temporal-sports-tracker [image version]
 ```
 
 ### 2. Update Image References
@@ -57,12 +56,12 @@ Edit the image references in the Kubernetes manifests:
 
 **k8s/web-deployment.yaml:**
 ```yaml
-image: [your-image-repo]/[image name root]-web:latest
+image: [your-image-repo]/temporal-sports-tracker-web:[image-version]
 ```
 
 **k8s/worker-deployment.yaml:**
 ```yaml
-image: [your-image-repo]/[image-name-root]-worker:latest
+image: [your-image-repo]/temporal-sports-tracker-worker:[image-version]
 ```
 
 ### 3. Configure Temporal Connection
@@ -74,14 +73,15 @@ data:
   TEMPORAL_HOST: "your-temporal-server:7233"
   TEMPORAL_NAMESPACE: "default"
 ```
-Update the NOTIFICATION_TYPES and NOTIFICATION_CHANNELS depending on what types of notification you want (options: underdog,score_change) and what channels you want the notifications to go to (options: logger,slack,hass):
+Update the NOTIFICATION_TYPES and NOTIFICATION_CHANNELS depending on what types of notification you want (options: underdog,score_change) and what channels you want the notifications to go to (options: logger,slack,hass). If using Slack, update the SLACK_CHANNEL_ID:
 
 ```yaml
-  NOTIFICATION_TYPES: "underdog,score_change" # Comma-separated list, options: underdog,score_change
-  NOTIFICATION_CHANNELS: "logger" # Comma-separated list, options: logger,slack,hass
+  NOTIFICATION_TYPES: "underdog,score_change,overtime" # Comma-separated list, options: underdog,score_change,overtime
+  NOTIFICATION_CHANNELS: "logger,slack,hass" # Comma-separated list, options: logger,slack,hass
+  SLACK_CHANNEL_ID: [YOUR-SLACK-CHANNEL-ID]
 ```
 
-### 4. Deploy to EKS
+### 4. Deploy to K8s
 
 ```bash
 # Deploy to temporal-sports-tracker namespace
@@ -108,24 +108,6 @@ Both services have Horizontal Pod Autoscalers (HPA) configured:
 
 - **Web HPA**: Scales based on CPU (70%) and memory (80%) utilization
 - **Worker HPA**: Scales based on CPU (80%) and memory (85%) utilization
-
-### Health Checks
-
-**Web Service:**
-- Liveness/Readiness probes on HTTP endpoint `/`
-- Initial delay: 30s (liveness), 5s (readiness)
-
-**Worker Service:**
-- Process-based health checks using `pgrep`
-- Initial delay: 30s (liveness), 10s (readiness)
-
-### Security
-
-Both containers run with security best practices:
-- Non-root user (UID 1001)
-- Read-only root filesystem
-- Dropped capabilities
-- Security contexts enforced
 
 ## Monitoring and Troubleshooting
 

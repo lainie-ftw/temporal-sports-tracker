@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: web
-        image: lainieftw/temporal-sports-tracker-web:1.0
+        image: [YOUR IMAGE AND TAG]
         ports:
         - containerPort: 8080
           name: http
