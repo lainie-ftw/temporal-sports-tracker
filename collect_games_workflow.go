@@ -7,8 +7,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-// CollectGamesWorkflow runs weekly to collect all games based on input and schedule each game as a GameWorkflow
-	//TODO: allow scheduling by team, teams, conference, or conferences, and get rid of duplicates (i.e., send Big10 and U of M, only make 1 U of M workflow)
+// CollectGamesWorkflow collects all games based on input and schedules each game as a GameWorkflow
 func CollectGamesWorkflow(ctx workflow.Context, trackingRequest TrackingRequest) (int, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting Collect Games Workflow.")
@@ -47,14 +46,6 @@ func CollectGamesWorkflow(ctx workflow.Context, trackingRequest TrackingRequest)
 		}
 	}
 
-	//Should the scheduling just sleep for a week? Can I just do the scheduling some other way??
-
-	// Schedule next run in one week
-//	nextRun := workflow.Now(ctx).Add(7 * 24 * time.Hour)
-//	logger.Info("Scheduling next weekly run", "nextRun", nextRun)
-
-	// Continue as new workflow
-//	return workflow.NewContinueAsNewError(ctx, WeeklyPollerWorkflow)
 	var totalGames = len(games)
 	logger.Info("Collect Games Workflow completed.")
 	return totalGames, nil

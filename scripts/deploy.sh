@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deploy Temporal Sports Tracker to EKS
+# Deploy Temporal Sports Tracker to K8s
 # Usage: ./scripts/deploy.sh
 
 set -e
@@ -57,7 +57,3 @@ echo ""
 echo "View logs:"
 echo "  kubectl logs -n $NAMESPACE -l component=web -f"
 echo "  kubectl logs -n $NAMESPACE -l component=worker -f"
-echo ""
-echo "Port forward to access web UI locally:"
-echo "  kubectl port-forward -n $NAMESPACE svc/temporal-sports-tracker-web-service 8080:80"
-echo "  Then open http://localhost:8080"
