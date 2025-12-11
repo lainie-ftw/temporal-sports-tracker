@@ -189,7 +189,10 @@ func GetGameScoreActivity(ctx context.Context, game Game) (Game, error) {
 	logger.Info("Fetching game score", "gameID", game.ID)
 	
 	var gameUpdate Game
+	// If it's not football (NFL or NCAAF), use the general scoreboard endpoint
 	url := game.APIRoot + "/scoreboard"
+
+	// If it is football, use the game/event summary endpoint
 //	url := fmt.Sprintf("%s/summary?event=%s", game.APIRoot, game.ID) //Example: https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=:gameId
 	
 	resp, err := http.Get(url)
