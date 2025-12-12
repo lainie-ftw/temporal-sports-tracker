@@ -54,21 +54,26 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 	logger.Info("Game monitoring started", "gameID", game.ID)
 
-	// Grab notification types and channels requested
-	notificationTypesStr := os.Getenv("NOTIFICATION_TYPES")
-	var notificationTypes []string
-	if notificationTypesStr == "" {
-		notificationTypes = []string{"score_change"} // if not set, default to notifying if the score changes
-	} else {
-		notificationTypes = strings.Split(notificationTypesStr, ",")
+	// Grab notification types and channels from the game object (set by CollectGamesWorkflow)
+	// Fall back to environment variables for backwards compatibility
+	notificationTypes := game.NotificationTypes
+	if len(notificationTypes) == 0 {
+		notificationTypesStr := os.Getenv("NOTIFICATION_TYPES")
+		if notificationTypesStr == "" {
+			notificationTypes = []string{"score_change"} // if not set, default to notifying if the score changes
+		} else {
+			notificationTypes = strings.Split(notificationTypesStr, ",")
+		}
 	}
 
-	notificationChannelsStr := os.Getenv("NOTIFICATION_CHANNELS")
-	var notificationChannels []string
-	if notificationChannelsStr == "" {
-		notificationChannels = []string{"logger"} // if not set, default to just logging the message
-	} else {
-		notificationChannels = strings.Split(notificationChannelsStr, ",")
+	notificationChannels := game.NotificationChannels
+	if len(notificationChannels) == 0 {
+		notificationChannelsStr := os.Getenv("NOTIFICATION_CHANNELS")
+		if notificationChannelsStr == "" {
+			notificationChannels = []string{"logger"} // if not set, default to just logging the message
+		} else {
+			notificationChannels = strings.Split(notificationChannelsStr, ",")
+		}
 	}
 
 	// Initialize score tracking

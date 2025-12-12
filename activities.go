@@ -154,6 +154,8 @@ func BuildGame(comp Competition, homeTeam Competitor, awayTeam Competitor, apiRo
 		DisplayClock: comp.Status.DisplayClock,
 		NumberOfPeriods: comp.Format.Regulation.NumberOfPeriods,
 		UnderdogWinning: false,
+		NotificationTypes: request.NotificationTypes,
+		NotificationChannels: request.NotificationChannels,
 	}
 
 	game.CurrentPeriod = fmt.Sprintf("%d", int(comp.Status.Period))

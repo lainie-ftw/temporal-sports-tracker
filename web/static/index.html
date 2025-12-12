@@ -62,6 +62,46 @@
                         <small>Hold Ctrl/Cmd to select multiple conferences</small>
                     </div>
 
+                    <div class="notification-settings">
+                        <div class="form-group">
+                            <label>Notification Types:</label>
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" name="notification-type" value="score_change" checked>
+                                    Score Changes
+                                </label>
+                                <label>
+                                    <input type="checkbox" name="notification-type" value="underdog">
+                                    Underdog Winning
+                                </label>
+                                <label>
+                                    <input type="checkbox" name="notification-type" value="overtime">
+                                    Overtime
+                                </label>
+                            </div>
+                            <small>Select the types of notifications you want to receive</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Notification Channels:</label>
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" name="notification-channel" value="logger" checked>
+                                    Logger
+                                </label>
+                                <label>
+                                    <input type="checkbox" name="notification-channel" value="slack">
+                                    Slack
+                                </label>
+                                <label>
+                                    <input type="checkbox" name="notification-channel" value="hass">
+                                    Home Assistant
+                                </label>
+                            </div>
+                            <small>Select where to send notifications</small>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label for="schedule-type">Run Frequency:</label>
                         <select id="schedule-type" required>

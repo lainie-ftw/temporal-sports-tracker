@@ -116,6 +116,8 @@ type Game struct {
 	CurrentPeriod		string
 	NumberOfPeriods int
 	DisplayClock string
+	NotificationTypes   []string // Notification types to trigger for this game
+	NotificationChannels []string // Channels to send notifications to
 }
 
 // ScoreUpdate represents a score change notification
@@ -134,11 +136,13 @@ type ScoreUpdate struct {
 
 // TrackingRequest represents the request to start tracking
 type TrackingRequest struct {
-	Sport        string   `json:"sport"`
-	League       string   `json:"league"`
-	Teams        []string `json:"teams"`
-	Conferences  []string `json:"conferences"`
-	ScheduleType string   `json:"scheduleType"` // "once", "daily", "weekly"
+	Sport               string   `json:"sport"`
+	League              string   `json:"league"`
+	Teams               []string `json:"teams"`
+	Conferences         []string `json:"conferences"`
+	ScheduleType        string   `json:"scheduleType"` // "once", "daily", "weekly"
+	NotificationTypes   []string `json:"notificationTypes"`   // e.g., ["underdog", "score_change", "overtime"]
+	NotificationChannels []string `json:"notificationChannels"` // e.g., ["slack", "hass", "logger"]
 }
 
 // Notification represents a notification to be sent

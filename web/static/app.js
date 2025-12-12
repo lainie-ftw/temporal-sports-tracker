@@ -177,6 +177,17 @@ async function handleTrackingSubmit(e) {
     const trackType = document.querySelector('input[name="track-type"]:checked').value;
     const selectedTeams = Array.from(teamsSelect.selectedOptions).map(option => option.value);
     const selectedConferences = Array.from(conferencesSelect.selectedOptions).map(option => option.value);
+    
+    // Get checked notification types
+    const selectedNotificationTypes = Array.from(
+        document.querySelectorAll('input[name="notification-type"]:checked')
+    ).map(checkbox => checkbox.value);
+    
+    // Get checked notification channels
+    const selectedNotificationChannels = Array.from(
+        document.querySelectorAll('input[name="notification-channel"]:checked')
+    ).map(checkbox => checkbox.value);
+    
     const scheduleType = scheduleTypeSelect.value;
     
     const requestData = {
@@ -184,6 +195,8 @@ async function handleTrackingSubmit(e) {
         league: currentLeague,
         teams: trackType === 'teams' ? selectedTeams : [],
         conferences: trackType === 'conferences' ? selectedConferences : [],
+        notificationTypes: selectedNotificationTypes,
+        notificationChannels: selectedNotificationChannels,
         scheduleType: scheduleType
     };
 
