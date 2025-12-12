@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"time"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
@@ -52,9 +53,42 @@ func StartGameWorkflowActivity(ctx context.Context, game Game) error {
 // Get games based on user input from the ESPN API
 func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]Game, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("Fetching games from ESPN API")
+	logger.Info("Fetching games")
+
+	// Handle eSports CS2 separately
+	if trackingRequest.Sport == "esports" && trackingRequest.League == "cs2" {
+		logger.Info("Fetching CS2 matches - returning dummy game for testing")
+		// TODO: Replace with LLM call to fetch actual matches from Liquipedia
+		// For each team in trackingRequest.Teams:
+		//   1. Call LLM to read https://liquipedia.net/counterstrike/[team name]
+		//   2. Parse upcoming matches from the team page
+		//   3. Create Game structs for each upcoming match
+		//   4. Return the list of games
+		
+		// For now, return a dummy game if teams are selected
+		var games []Game
+		if len(trackingRequest.Teams) >= 2 {
+			// Create a dummy match between the first two selected teams
+			dummyGame := Game{
+				ID:           "cs2-dummy-match-" + time.Now().Format("20060102-150405"),
+				Sport:        "esports",
+				League:       "cs2",
+				HomeTeam:     Team{ID: trackingRequest.Teams[0], DisplayName: trackingRequest.Teams[0], Abbreviation: trackingRequest.Teams[0][:min(4, len(trackingRequest.Teams[0]))]},
+				AwayTeam:     Team{ID: trackingRequest.Teams[1], DisplayName: trackingRequest.Teams[1], Abbreviation: trackingRequest.Teams[1][:min(4, len(trackingRequest.Teams[1]))]},
+				StartTime:    time.Now().Add(1 * time.Hour), // 1 hour from now
+				Status:       "pre",
+				CurrentScore: map[string]string{trackingRequest.Teams[0]: "0", trackingRequest.Teams[1]: "0"},
+				NotificationTypes:    trackingRequest.NotificationTypes,
+				NotificationChannels: trackingRequest.NotificationChannels,
+			}
+			games = append(games, dummyGame)
+			logger.Info("Created dummy CS2 match", "gameID", dummyGame.ID)
+		}
+		return games, nil
+	}
 
 	// Use the trackingRequest (sport and league) to build the URL
+	logger.Info("Fetching games from ESPN API")
 	var apiRoot string = fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/%s/%s", trackingRequest.Sport, trackingRequest.League)
 	scoreboardUrl := apiRoot + "/scoreboard" //If you don't specify a conference, it will give you the top 25 games across all conferences
 
@@ -191,6 +225,19 @@ func GetGameScoreActivity(ctx context.Context, game Game) (Game, error) {
 	logger.Info("Fetching game score", "gameID", game.ID)
 	
 	var gameUpdate Game
+	
+	// Handle eSports CS2 separately - no score polling for now
+	if game.Sport == "esports" && game.League == "cs2" {
+		logger.Info("CS2 game - skipping score polling (placeholder)")
+		// TODO: Implement LLM-based score polling for CS2 matches
+		// This will call an LLM to read the match page on Liquipedia and extract current score
+		// For now, return the game with unchanged scores
+		gameUpdate.CurrentScore = game.CurrentScore
+		gameUpdate.CurrentPeriod = game.CurrentPeriod
+		gameUpdate.DisplayClock = game.DisplayClock
+		return gameUpdate, nil
+	}
+	
 	url := game.APIRoot + "/scoreboard"
 //	url := fmt.Sprintf("%s/summary?event=%s", game.APIRoot, game.ID) //Example: https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=:gameId
 	

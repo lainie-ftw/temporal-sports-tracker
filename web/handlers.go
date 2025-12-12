@@ -72,6 +72,7 @@ func (h *Handlers) GetSports(w http.ResponseWriter, r *http.Request) {
 	sports := []Sport{
 		{ID: "baseball", Name: "Baseball", Path: "baseball"},
 		{ID: "basketball", Name: "Basketball", Path: "basketball"},
+		{ID: "esports", Name: "eSports", Path: "esports"},
 		{ID: "football", Name: "Football", Path: "football"},
 		{ID: "hockey", Name: "Hockey", Path: "hockey"},
 		{ID: "soccer", Name: "Soccer", Path: "soccer"},
@@ -121,6 +122,10 @@ func (h *Handlers) GetLeagues(w http.ResponseWriter, r *http.Request) {
 			{ID: "eng.1", Name: "English Premier League", Path: "eng.1"},
 			{ID: "uefa.champions", Name: "UEFA Champions League", Path: "uefa.champions"},
 		}
+	case "esports":
+		leagues = []League{
+			{ID: "cs2", Name: "CS2", Path: "cs2"},
+		}
 	default:
 		http.Error(w, "Unsupported sport", http.StatusBadRequest)
 		return
@@ -130,7 +135,7 @@ func (h *Handlers) GetLeagues(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(leagues)
 }
 
-// GetTeams fetches teams for a specific sport/league from ESPN API
+// GetTeams fetches teams for a specific sport/league from ESPN API or Liquipedia
 func (h *Handlers) GetTeams(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -146,6 +151,20 @@ func (h *Handlers) GetTeams(w http.ResponseWriter, r *http.Request) {
 	sport := pathParts[0]
 	league := pathParts[1]
 
+	// Handle eSports CS2 separately - scrape from Liquipedia
+	if sport == "esports" && league == "cs2" {
+		teams, err := getCS2TeamsFromLiquipedia()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to fetch CS2 teams: %v", err), http.StatusInternalServerError)
+			return
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(teams)
+		return
+	}
+
+	// Handle ESPN sports
 	url := fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/%s/%s/scoreboard", sport, league)
 	
 	resp, err := http.Get(url)
@@ -197,6 +216,54 @@ func (h *Handlers) GetTeams(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(teams)
+}
+
+// scrapeCS2TeamsFromLiquipedia fetches Notable Active CS2 teams
+// Uses a curated list to ensure only active teams are returned
+func getCS2TeamsFromLiquipedia() ([]sports.Team, error) {
+	// Curated list of best CS2 teams
+	//TODO: read the main page and add teams that have active games coming up
+	notableTeamNames := []string{
+		"FaZe Clan", "G2 Esports", "Astralis", "Passion UA", "FURIA Esports", 
+		"Team Liquid", "Team Falcons",
+	}
+
+	teams := []sports.Team{}
+	
+	for _, teamName := range notableTeamNames {
+		teamID := strings.ReplaceAll(teamName, " ", "_")
+		
+		// Create abbreviation from first letters of words
+		words := strings.Fields(teamName)
+		abbreviation := ""
+		for _, word := range words {
+			if len(word) > 0 {
+				abbreviation += strings.ToUpper(string(word[0]))
+			}
+		}
+		if abbreviation == "" || len(abbreviation) > 5 {
+			// If no abbreviation or too long, use first 4 chars
+			if len(teamID) >= 4 {
+				abbreviation = strings.ToUpper(teamID[:4])
+			} else {
+				abbreviation = strings.ToUpper(teamID)
+			}
+		}
+		
+		teams = append(teams, sports.Team{
+			ID:           teamID,
+			Name:         teamName,
+			DisplayName:  teamName,
+			Abbreviation: abbreviation,
+		})
+	}
+
+	// Sort teams alphabetically by DisplayName
+	sort.Slice(teams, func(i, j int) bool {
+		return teams[i].DisplayName < teams[j].DisplayName
+	})
+
+	return teams, nil
 }
 
 // GetConferences returns available conferences for a sport/league

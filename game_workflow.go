@@ -85,10 +85,18 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 	// Initialize overtime tracking to the number of regulation periods in the game
 	lastOvertimePeriod := game.NumberOfPeriods
 
+	// For eSports CS2, use a longer polling interval or skip entirely
+	// TODO: When LLM-based match monitoring is implemented, this can be replaced
+	pollInterval := 5 * time.Minute
+	if game.Sport == "esports" && game.League == "cs2" {
+		logger.Info("CS2 game detected - using longer poll interval (placeholder)")
+		pollInterval = 30 * time.Minute // Poll less frequently for CS2 placeholder
+	}
+
 	// Monitor the game for 5 hours after start time - could be modified to check for the game status instead
 	for workflow.Now(ctx).Before(game.StartTime.Add(5 * time.Hour)) {
-		// Wait 5 minutes before next poll
-		timer := workflow.NewTimer(ctx, 5*time.Minute)
+		// Wait before next poll
+		timer := workflow.NewTimer(ctx, pollInterval)
 		selector := workflow.NewSelector(ctx)
 		selector.AddFuture(timer, func(f workflow.Future) {
 			// Timer fired, time to poll again
