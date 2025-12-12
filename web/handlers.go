@@ -224,7 +224,7 @@ func getCS2TeamsFromLiquipedia() ([]sports.Team, error) {
 	// Curated list of best CS2 teams
 	//TODO: read the main page and add teams that have active games coming up
 	notableTeamNames := []string{
-		"FaZe Clan", "G2 Esports", "Astralis", "Passion UA", "FURIA Esports", 
+		"FaZe Clan", "G2 Esports", "Astralis", "Passion UA", "FURIA", 
 		"Team Liquid", "Team Falcons",
 	}
 

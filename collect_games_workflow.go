@@ -14,12 +14,12 @@ func CollectGamesWorkflow(ctx workflow.Context, trackingRequest TrackingRequest)
 
 	// Set up activity options with retry policy
 	activityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: 30 * time.Second,
+		StartToCloseTimeout: 90 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumInterval:    30 * time.Second,
-			MaximumAttempts:    3,
+		//	BackoffCoefficient: 2.0,
+			MaximumInterval:    90 * time.Second,
+		//	MaximumAttempts:    3,
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)

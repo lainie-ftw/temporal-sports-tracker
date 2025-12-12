@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 
+	"github.com/sashabaranov/go-openai"
 	"github.com/slack-go/slack"
 )
 
@@ -50,40 +52,233 @@ func StartGameWorkflowActivity(ctx context.Context, game Game) error {
 	return nil
 }
 
+// fetchCS2MatchesFromLiquipedia uses an LLM to scrape upcoming CS2 matches from Liquipedia
+func fetchCS2MatchesFromLiquipedia(ctx context.Context, teamName string, trackingRequest TrackingRequest) ([]Game, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("Fetching CS2 matches from Liquipedia via LLM", "team", teamName)
+
+	openRouterAPIKey := os.Getenv("OPENROUTER_API_KEY")
+	if openRouterAPIKey == "" {
+		return nil, fmt.Errorf("OPENROUTER_API_KEY environment variable is not set")
+	}
+
+	// Create OpenAI client configured for OpenRouter
+	config := openai.DefaultConfig(openRouterAPIKey)
+	config.BaseURL = "https://openrouter.ai/api/v1"
+	client := openai.NewClientWithConfig(config)
+
+	// Construct the Liquipedia URL
+	//liquipediaURL := fmt.Sprintf("https://liquipedia.net/counterstrike/%s", strings.ReplaceAll(teamName, " ", "_"))
+	liquipediaURL := "https://liquipedia.net/counterstrike/Liquipedia:Matches"
+
+	// Fetch the HTML content from Liquipedia
+	httpResp, err := http.Get(liquipediaURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch Liquipedia page: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	htmlContent, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Liquipedia page content: %w", err)
+	}
+
+	htmlString := string(htmlContent)
+	println(htmlString)
+
+	// Create the prompt for the LLM with the actual HTML content
+	prompt := fmt.Sprintf(`You are a data extraction assistant. Extract information from the provided HTML content.
+
+TASK: Find the next scheduled match for the team "%s" in the upcoming matches section.
+
+INSTRUCTIONS:
+1. Search for "%s" in team names in the Matches section
+2. Find the EARLIEST upcoming OR active match (not concluded matches)
+3. Extract these exact fields:
+   - team1: First team name
+   - team2: Second team name (opponent)
+   - date: The match date in format like "December 15, 2025"
+   - time: The match time (include timezone)
+   - tournament: The tournament name
+
+OUTPUT FORMAT:
+Respond ONLY with valid JSON array. No explanations, no markdown formatting.
+[
+  {
+    "team1": "Team A",
+    "team2": "Team B",
+    "date": "December 15, 2025",
+    "time": "18:00 CET",
+    "tournament": "ESL Pro League Season 19"
+  }
+]
+
+If you do not find upcoming matches, respond with an empty array:
+[]
+
+HTML CONTENT:
+%s`, teamName, teamName, htmlString)
+
+	resp, err := client.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: "meta-llama/llama-3.3-70b-instruct:free",
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: prompt,
+				},
+			},
+			MaxTokens: 2000,
+		},
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("LLM request failed: %w", err)
+	}
+
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("no response from LLM")
+	}
+
+	responseText := resp.Choices[0].Message.Content
+	logger.Info("LLM response", "response", responseText)
+
+	// Parse the JSON response
+	var matchesData []map[string]string
+	// Clean the response - sometimes LLMs add markdown code blocks
+	responseText = strings.TrimSpace(responseText)
+	responseText = strings.TrimPrefix(responseText, "```json")
+	responseText = strings.TrimPrefix(responseText, "```")
+	responseText = strings.TrimSuffix(responseText, "```")
+	responseText = strings.TrimSpace(responseText)
+
+	if err := json.Unmarshal([]byte(responseText), &matchesData); err != nil {
+		return nil, fmt.Errorf("failed to parse LLM response as JSON: %w (response: %s)", err, responseText)
+	}
+
+	// Convert the parsed data to Game structs
+	var games []Game
+	for _, matchData := range matchesData {
+		team1 := matchData["team1"]
+		team2 := matchData["team2"]
+		dateStr := matchData["date"]
+		timeStr := matchData["time"]
+		tournament := matchData["tournament"]
+
+		// Parse the date and time
+		startTime := parseMatchDateTime(dateStr, timeStr)
+
+		// Create a unique game ID
+		gameID := fmt.Sprintf("cs2-%s-vs-%s-%s", 
+			strings.ToLower(strings.ReplaceAll(team1, " ", "-")),
+			strings.ToLower(strings.ReplaceAll(team2, " ", "-")),
+			startTime.Format("20060102"))
+
+		// Create the Game struct
+		game := Game{
+			ID:        gameID,
+			Sport:     "esports",
+			League:    "cs2",
+			HomeTeam:  Team{ID: team1, DisplayName: team1, Abbreviation: getAbbreviation(team1)},
+			AwayTeam:  Team{ID: team2, DisplayName: team2, Abbreviation: getAbbreviation(team2)},
+			StartTime: startTime,
+			Status:    "pre",
+			CurrentScore: map[string]string{team1: "0", team2: "0"},
+			TVNetwork: tournament,
+			NotificationTypes:    trackingRequest.NotificationTypes,
+			NotificationChannels: trackingRequest.NotificationChannels,
+		}
+
+		games = append(games, game)
+	}
+
+	logger.Info("Parsed matches from Liquipedia", "count", len(games), "team", teamName)
+	return games, nil
+}
+
+// parseMatchDateTime converts Liquipedia date/time strings to time.Time
+func parseMatchDateTime(dateStr, timeStr string) time.Time {
+	// Try to parse the date string
+	// Common formats: "December 15, 2025", "2025-12-15", "15 Dec 2025"
+	var t time.Time
+	var err error
+
+	// Try various date formats
+	formats := []string{
+		"January 2, 2006",
+		"2006-01-02",
+		"2 Jan 2006",
+		"Jan 2, 2006",
+	}
+
+	for _, format := range formats {
+		t, err = time.Parse(format, dateStr)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		// If we can't parse the date, default to 24 hours from now
+		return time.Now().Add(24 * time.Hour)
+	}
+
+	// If time string is provided, try to parse it (e.g., "18:00 CET")
+	// For simplicity, we'll ignore timezone and just parse the time
+	if timeStr != "" {
+		timeParts := strings.Fields(timeStr)
+		if len(timeParts) > 0 {
+			timeOnly := timeParts[0] // Get "18:00" from "18:00 CET"
+			if timeT, err := time.Parse("15:04", timeOnly); err == nil {
+				t = time.Date(t.Year(), t.Month(), t.Day(), timeT.Hour(), timeT.Minute(), 0, 0, t.Location())
+			}
+		}
+	}
+
+	return t
+}
+
+// getAbbreviation returns a short abbreviation for a team name (max 4 characters)
+func getAbbreviation(teamName string) string {
+	if len(teamName) <= 4 {
+		return teamName
+	}
+	return teamName[:4]
+}
+
 // Get games based on user input from the ESPN API
 func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]Game, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Fetching games")
 
-	// Handle eSports CS2 separately
+	var games []Game
+
+	// Handle eSports CS2 separately - fetch matches from Liquipedia using LLM
 	if trackingRequest.Sport == "esports" && trackingRequest.League == "cs2" {
-		logger.Info("Fetching CS2 matches - returning dummy game for testing")
-		// TODO: Replace with LLM call to fetch actual matches from Liquipedia
-		// For each team in trackingRequest.Teams:
-		//   1. Call LLM to read https://liquipedia.net/counterstrike/[team name]
-		//   2. Parse upcoming matches from the team page
-		//   3. Create Game structs for each upcoming match
-		//   4. Return the list of games
+		logger.Info("Fetching CS2 matches from Liquipedia via LLM")
 		
-		// For now, return a dummy game if teams are selected
-		var games []Game
-		if len(trackingRequest.Teams) >= 2 {
-			// Create a dummy match between the first two selected teams
-			dummyGame := Game{
-				ID:           "cs2-dummy-match-" + time.Now().Format("20060102-150405"),
-				Sport:        "esports",
-				League:       "cs2",
-				HomeTeam:     Team{ID: trackingRequest.Teams[0], DisplayName: trackingRequest.Teams[0], Abbreviation: trackingRequest.Teams[0][:min(4, len(trackingRequest.Teams[0]))]},
-				AwayTeam:     Team{ID: trackingRequest.Teams[1], DisplayName: trackingRequest.Teams[1], Abbreviation: trackingRequest.Teams[1][:min(4, len(trackingRequest.Teams[1]))]},
-				StartTime:    time.Now().Add(1 * time.Hour), // 1 hour from now
-				Status:       "pre",
-				CurrentScore: map[string]string{trackingRequest.Teams[0]: "0", trackingRequest.Teams[1]: "0"},
-				NotificationTypes:    trackingRequest.NotificationTypes,
-				NotificationChannels: trackingRequest.NotificationChannels,
+		// Track unique game IDs to avoid duplicates
+		seenGames := make(map[string]bool)
+		
+		// For each team in trackingRequest.Teams, call LLM to fetch matches from Liquipedia
+		for _, teamName := range trackingRequest.Teams {
+			teamGames, err := fetchCS2MatchesFromLiquipedia(ctx, teamName, trackingRequest)
+			if err != nil {
+				logger.Warn("Failed to fetch CS2 matches for team", "team", teamName, "error", err)
+				continue
 			}
-			games = append(games, dummyGame)
-			logger.Info("Created dummy CS2 match", "gameID", dummyGame.ID)
+			
+			// Add games, avoiding duplicates
+			for _, game := range teamGames {
+				if !seenGames[game.ID] {
+					games = append(games, game)
+					seenGames[game.ID] = true
+				}
+			}
 		}
+		
+		logger.Info("Fetched CS2 matches", "count", len(games))
 		return games, nil
 	}
 
@@ -91,8 +286,6 @@ func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]G
 	logger.Info("Fetching games from ESPN API")
 	var apiRoot string = fmt.Sprintf("https://site.api.espn.com/apis/site/v2/sports/%s/%s", trackingRequest.Sport, trackingRequest.League)
 	scoreboardUrl := apiRoot + "/scoreboard" //If you don't specify a conference, it will give you the top 25 games across all conferences
-
-	var games []Game
 
 	// if trackingRequest.Conferences is not empty, hit API for each conference and combine results
 	if len(trackingRequest.Conferences) > 0 {
@@ -131,7 +324,7 @@ func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]G
 			}
 		}
 	}
-	
+
 	// if trackingRequest.Teams is not empty, hit the general scoreboard and filter results for those teams
 	if len(trackingRequest.Teams) > 0 {
 		resp, err := http.Get(scoreboardUrl)
@@ -177,23 +370,23 @@ func GetGamesActivity(ctx context.Context, trackingRequest TrackingRequest) ([]G
 // Helper function to create a Game from a Competition and its Competitors
 func BuildGame(comp Competition, homeTeam Competitor, awayTeam Competitor, apiRoot string, request TrackingRequest) Game {
 	game := Game{
-		ID:           comp.ID,
-		Sport: 	 	  request.Sport,
-		League: 	  request.League,
-		StartTime:    comp.Date.Time,
-		Status:       comp.Status.Type.State,
-		APIRoot:      apiRoot,
-		CurrentScore: make(map[string]string),
-		TVNetwork:    comp.Broadcast,
-		DisplayClock: comp.Status.DisplayClock,
-		NumberOfPeriods: comp.Format.Regulation.NumberOfPeriods,
-		UnderdogWinning: false,
-		NotificationTypes: request.NotificationTypes,
+		ID:                   comp.ID,
+		Sport:                request.Sport,
+		League:               request.League,
+		StartTime:            comp.Date.Time,
+		Status:               comp.Status.Type.State,
+		APIRoot:              apiRoot,
+		CurrentScore:         make(map[string]string),
+		TVNetwork:            comp.Broadcast,
+		DisplayClock:         comp.Status.DisplayClock,
+		NumberOfPeriods:      comp.Format.Regulation.NumberOfPeriods,
+		UnderdogWinning:      false,
+		NotificationTypes:    request.NotificationTypes,
 		NotificationChannels: request.NotificationChannels,
 	}
 
 	game.CurrentPeriod = fmt.Sprintf("%d", int(comp.Status.Period))
-	
+
 	// Determine home and away teams
 	if homeTeam.HomeAway == "home" {
 		game.HomeTeam = homeTeam.Team
@@ -223,9 +416,9 @@ func BuildGame(comp Competition, homeTeam Competitor, awayTeam Competitor, apiRo
 func GetGameScoreActivity(ctx context.Context, game Game) (Game, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Fetching game score", "gameID", game.ID)
-	
+
 	var gameUpdate Game
-	
+
 	// Handle eSports CS2 separately - no score polling for now
 	if game.Sport == "esports" && game.League == "cs2" {
 		logger.Info("CS2 game - skipping score polling (placeholder)")
@@ -237,10 +430,10 @@ func GetGameScoreActivity(ctx context.Context, game Game) (Game, error) {
 		gameUpdate.DisplayClock = game.DisplayClock
 		return gameUpdate, nil
 	}
-	
+
 	url := game.APIRoot + "/scoreboard"
-//	url := fmt.Sprintf("%s/summary?event=%s", game.APIRoot, game.ID) //Example: https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=:gameId
-	
+	//	url := fmt.Sprintf("%s/summary?event=%s", game.APIRoot, game.ID) //Example: https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=:gameId
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return gameUpdate, fmt.Errorf("failed to fetch game score: %w", err)
@@ -266,7 +459,7 @@ func GetGameScoreActivity(ctx context.Context, game Game) (Game, error) {
 			for _, competitor := range comp.Competitors {
 				scores[competitor.Team.ID] = competitor.Score
 			}
-			
+
 			// Update the current quarter, display clock, and scores in the game object
 			gameUpdate.CurrentPeriod = fmt.Sprintf("%d", int(comp.Status.Period))
 			if comp.Status.DisplayClock != "" {
@@ -322,7 +515,7 @@ func SendHomeAssistantNotification(ctx context.Context, notification Notificatio
 	jsonScoreUpdate := map[string]string{
 		"title":   notification.Title,
 		"message": notification.Message,
-	}	
+	}
 	jsonData, err := json.Marshal(jsonScoreUpdate)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
@@ -364,9 +557,9 @@ func SendSlackNotification(ctx context.Context, notification Notification) error
 
 	api := slack.New(slackBotToken)
 	attachment := slack.Attachment{
-		Title: 	notification.Title,
-		Text:   notification.Message,
-		Color:  "#444CE7", // Temporal UV
+		Title: notification.Title,
+		Text:  notification.Message,
+		Color: "#444CE7", // Temporal UV
 	}
 
 	_, _, err := api.PostMessage(
