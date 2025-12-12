@@ -134,10 +134,11 @@ type ScoreUpdate struct {
 
 // TrackingRequest represents the request to start tracking
 type TrackingRequest struct {
-	Sport       string   `json:"sport"`
-	League      string   `json:"league"`
-	Teams       []string `json:"teams"`
-	Conferences []string `json:"conferences"`
+	Sport        string   `json:"sport"`
+	League       string   `json:"league"`
+	Teams        []string `json:"teams"`
+	Conferences  []string `json:"conferences"`
+	ScheduleType string   `json:"scheduleType"` // "once", "daily", "weekly"
 }
 
 // Notification represents a notification to be sent

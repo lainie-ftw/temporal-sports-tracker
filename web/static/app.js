@@ -10,21 +10,29 @@ const teamsSelect = document.getElementById('teams-select');
 const conferencesSelect = document.getElementById('conferences-select');
 const teamsGroup = document.getElementById('teams-group');
 const conferencesGroup = document.getElementById('conferences-group');
+const scheduleTypeSelect = document.getElementById('schedule-type');
 const trackingForm = document.getElementById('tracking-form');
 const startTrackingBtn = document.getElementById('start-tracking-btn');
 const refreshWorkflowsBtn = document.getElementById('refresh-workflows-btn');
+const refreshSchedulesBtn = document.getElementById('refresh-schedules-btn');
 const workflowsList = document.getElementById('workflows-list');
 const workflowsCount = document.getElementById('workflows-count');
+const schedulesList = document.getElementById('schedules-list');
+const schedulesCount = document.getElementById('schedules-count');
 const statusMessage = document.getElementById('status-message');
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', function() {
     loadSports();
     loadWorkflows();
+    loadSchedules();
     setupEventListeners();
     
-    // Auto-refresh workflows every 30 seconds
-    refreshInterval = setInterval(loadWorkflows, 30000);
+    // Auto-refresh workflows and schedules every 30 seconds
+    refreshInterval = setInterval(() => {
+        loadWorkflows();
+        loadSchedules();
+    }, 30000);
 });
 
 // Event listeners
@@ -72,8 +80,9 @@ function setupEventListeners() {
     // Form submission
     trackingForm.addEventListener('submit', handleTrackingSubmit);
 
-    // Refresh workflows
+    // Refresh workflows and schedules
     refreshWorkflowsBtn.addEventListener('click', loadWorkflows);
+    refreshSchedulesBtn.addEventListener('click', loadSchedules);
 }
 
 // API calls
@@ -168,12 +177,14 @@ async function handleTrackingSubmit(e) {
     const trackType = document.querySelector('input[name="track-type"]:checked').value;
     const selectedTeams = Array.from(teamsSelect.selectedOptions).map(option => option.value);
     const selectedConferences = Array.from(conferencesSelect.selectedOptions).map(option => option.value);
+    const scheduleType = scheduleTypeSelect.value;
     
     const requestData = {
         sport: currentSport,
         league: currentLeague,
         teams: trackType === 'teams' ? selectedTeams : [],
-        conferences: trackType === 'conferences' ? selectedConferences : []
+        conferences: trackType === 'conferences' ? selectedConferences : [],
+        scheduleType: scheduleType
     };
 
     try {
@@ -185,14 +196,19 @@ async function handleTrackingSubmit(e) {
             body: JSON.stringify(requestData)
         });
         
-        showStatus('Tracking started successfully!', 'success');
+        const message = scheduleType === 'once' ? 'Tracking started successfully!' : 
+                       `Schedule created successfully (${scheduleType})!`;
+        showStatus(message, 'success');
         
         // Reset form
         trackingForm.reset();
         resetLeagueAndBelow();
         
-        // Refresh workflows after a short delay
-        setTimeout(loadWorkflows, 2000);
+        // Refresh workflows and schedules after a short delay
+        setTimeout(() => {
+            loadWorkflows();
+            loadSchedules();
+        }, 2000);
         
     } catch (error) {
         showStatus('Failed to start tracking', 'error');
@@ -308,6 +324,108 @@ function displayWorkflows(workflows) {
     `).join('');
     
     workflowsList.innerHTML = workflowsHTML;
+}
+
+// Load schedules
+async function loadSchedules() {
+    try {
+        const schedules = await apiCall('/api/schedules');
+        displaySchedules(schedules);
+    } catch (error) {
+        console.error('Failed to load schedules:', error);
+        // Don't show error message for schedule loading failures to avoid spam
+    }
+}
+
+// Display schedules
+function displaySchedules(schedules) {
+    schedulesCount.textContent = `${schedules.length} active schedule${schedules.length !== 1 ? 's' : ''}`;
+    
+    if (schedules.length === 0) {
+        schedulesList.innerHTML = `
+            <div class="no-schedules">
+                <p>No active schedules found.</p>
+                <p>Create a daily or weekly schedule to see it here!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const schedulesHTML = schedules.map(schedule => {
+        // Parse schedule ID to extract info if fields are missing
+        let sport = schedule.sport || '';
+        let league = schedule.league || '';
+        let scheduleType = schedule.scheduleType || '';
+        
+        // Parse from schedule ID as fallback: collect-games-{type}-{sport}-{league}-{timestamp}
+        if (!sport || !league || !scheduleType) {
+            const parts = schedule.scheduleId.split('-');
+            if (parts.length >= 5) {
+                scheduleType = scheduleType || parts[2]; // daily or weekly
+                sport = sport || parts[3];
+                // Handle multi-word leagues like "college-football"
+                if (parts.length > 6) {
+                    league = league || parts.slice(4, -2).join('-');
+                } else {
+                    league = league || parts[4];
+                }
+            }
+        }
+        
+        const teams = schedule.teams && schedule.teams.length > 0 ? schedule.teams.join(', ') : '';
+        const conferences = schedule.conferences && schedule.conferences.length > 0 ? schedule.conferences.join(', ') : '';
+        
+        let tracking = 'All games';
+        if (teams) {
+            tracking = `Teams: ${teams}`;
+        } else if (conferences) {
+            tracking = `Conferences: ${conferences}`;
+        }
+        
+        const nextRun = schedule.nextRunTime ? new Date(schedule.nextRunTime).toLocaleString() : 'N/A';
+        const frequency = scheduleType === 'daily' ? 'Daily' : scheduleType === 'weekly' ? 'Weekly' : 'Scheduled';
+        
+        return `
+        <div class="schedule-item">
+            <div class="schedule-header">
+                <div class="schedule-title">
+                    ${sport.toUpperCase()} - ${league.toUpperCase()}
+                    <div class="schedule-frequency">${frequency} at 1AM Eastern</div>
+                </div>
+                <div class="schedule-status ${schedule.paused ? 'paused' : 'active'}">
+                    ${schedule.paused ? 'Paused' : 'Active'}
+                </div>
+            </div>
+            <div class="schedule-details">
+                <div><strong>Tracking:</strong> ${tracking}</div>
+                <div><strong>Next Run:</strong> ${nextRun}</div>
+                <div><strong>Schedule ID:</strong> ${schedule.scheduleId}</div>
+            </div>
+            <div class="schedule-actions">
+                <button class="delete-btn" onclick="deleteSchedule('${schedule.scheduleId}')">Delete Schedule</button>
+            </div>
+        </div>
+    `}).join('');
+    
+    schedulesList.innerHTML = schedulesHTML;
+}
+
+// Delete schedule
+async function deleteSchedule(scheduleId) {
+    if (!confirm('Are you sure you want to delete this schedule?')) {
+        return;
+    }
+    
+    try {
+        await apiCall(`/api/schedules/${scheduleId}`, {
+            method: 'DELETE'
+        });
+        
+        showStatus('Schedule deleted successfully', 'success');
+        loadSchedules();
+    } catch (error) {
+        showStatus('Failed to delete schedule', 'error');
+    }
 }
 
 function showStatus(message, type = 'info') {

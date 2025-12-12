@@ -286,6 +286,118 @@ button:disabled {
     margin-bottom: 10px;
 }
 
+/* Schedules section */
+.schedules-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f1f3f4;
+}
+
+#refresh-schedules-btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    background: #28a745;
+}
+
+#refresh-schedules-btn:hover {
+    background: #218838;
+}
+
+#schedules-count {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.schedule-item {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+}
+
+.schedule-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.schedule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.schedule-title {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+.schedule-frequency {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-weight: normal;
+    margin-top: 5px;
+}
+
+.schedule-status {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.schedule-status.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.schedule-status.paused {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.schedule-details {
+    color: #6c757d;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.schedule-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.schedule-actions button {
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+.delete-btn {
+    background: #dc3545;
+}
+
+.delete-btn:hover {
+    background: #c82333;
+}
+
+.no-schedules {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+}
+
+.no-schedules p {
+    margin-bottom: 10px;
+}
+
 /* Status messages */
 .status-message {
     position: fixed;

@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -258,6 +259,11 @@ func (h *Handlers) StartTracking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default to "once" if not specified
+	if req.ScheduleType == "" {
+		req.ScheduleType = "once"
+	}
+
 	// Check if Temporal client is available
 	if h.temporalClient == nil {
 		response := map[string]string{
@@ -270,34 +276,78 @@ func (h *Handlers) StartTracking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create scheduling workflow ID with timestamp
-	workflowID := fmt.Sprintf("sports-%s", time.Now().Format("20060102-150405"))
-
 	TaskQueueName := os.Getenv("TASK_QUEUE")
 	if TaskQueueName == "" {
 		http.Error(w, "TASK_QUEUE environment variable is not set", http.StatusInternalServerError)
 		return
 	}
 
-	options := client.StartWorkflowOptions{
-		ID:        workflowID,
-		TaskQueue: TaskQueueName,
-	}
-	
-	we, err := h.temporalClient.ExecuteWorkflow(context.Background(), options, sports.CollectGamesWorkflow, req)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to start workflow: %v", err), http.StatusInternalServerError)
-		return
-	}
+	// Handle based on schedule type
+	if req.ScheduleType == "once" {
+		// One-time execution (original behavior)
+		workflowID := fmt.Sprintf("sports-%s", time.Now().Format("20060102-150405"))
 
-	response := map[string]string{
-		"workflowId": we.GetID(),
-		"runId":      we.GetRunID(),
-		"message":    "Tracking started successfully",
-	}
+		options := client.StartWorkflowOptions{
+			ID:        workflowID,
+			TaskQueue: TaskQueueName,
+		}
+		
+		we, err := h.temporalClient.ExecuteWorkflow(context.Background(), options, sports.CollectGamesWorkflow, req)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to start workflow: %v", err), http.StatusInternalServerError)
+			return
+		}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+		response := map[string]string{
+			"workflowId": we.GetID(),
+			"runId":      we.GetRunID(),
+			"message":    "Tracking started successfully",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	} else {
+		// Create a schedule (daily or weekly)
+		scheduleID := fmt.Sprintf("collect-games-%s-%s-%s-%s", 
+			req.ScheduleType, req.Sport, req.League, time.Now().Format("20060102-150405"))
+
+		var cronExpression string
+		switch req.ScheduleType {
+			case "daily":
+				cronExpression = "0 1 * * *" // 1AM every day
+			case "weekly":
+				cronExpression = "0 1 * * 1" // 1AM every Monday
+			default:
+				http.Error(w, "Invalid schedule type. Must be 'once', 'daily', or 'weekly'", http.StatusBadRequest)
+				return
+		}
+
+		scheduleClient := h.temporalClient.ScheduleClient()
+		_, err := scheduleClient.Create(context.Background(), client.ScheduleOptions{
+			ID: scheduleID,
+			Spec: client.ScheduleSpec{
+				CronExpressions: []string{cronExpression},
+				TimeZoneName:    "America/New_York",
+			},
+			Action: &client.ScheduleWorkflowAction{
+				Workflow:  sports.CollectGamesWorkflow,
+				Args:      []interface{}{req},
+				TaskQueue: TaskQueueName,
+			},
+		})
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create schedule: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		response := map[string]string{
+			"scheduleId": scheduleID,
+			"message":    fmt.Sprintf("Schedule created successfully (%s)", req.ScheduleType),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
 }
 
 // GetWorkflows returns currently running workflows
@@ -407,6 +457,167 @@ func (h *Handlers) ManageWorkflow(w http.ResponseWriter, r *http.Request) {
 		
 		response := map[string]string{
 			"message": "Workflow cancelled successfully",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// ScheduleInfo represents a schedule's information for display
+type ScheduleInfo struct {
+	ScheduleID   string    `json:"scheduleId"`
+	Sport        string    `json:"sport"`
+	League       string    `json:"league"`
+	Teams        []string  `json:"teams"`
+	Conferences  []string  `json:"conferences"`
+	ScheduleType string    `json:"scheduleType"`
+	NextRunTime  time.Time `json:"nextRunTime"`
+	Paused       bool      `json:"paused"`
+}
+
+// GetSchedules returns currently active schedules
+func (h *Handlers) GetSchedules(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var schedules []ScheduleInfo
+
+	// Check if Temporal client is available
+	if h.temporalClient == nil {
+		// Return empty list in demo mode
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(schedules)
+		return
+	}
+
+	scheduleClient := h.temporalClient.ScheduleClient()
+	
+	// List schedules
+	iter, err := scheduleClient.List(context.Background(), client.ScheduleListOptions{})
+	if err != nil {
+		fmt.Printf("Failed to list schedules: %v\n", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(schedules)
+		return
+	}
+
+	// Process each schedule
+	for iter.HasNext() {
+		entry, err := iter.Next()
+		if err != nil {
+			fmt.Printf("Error iterating schedules: %v\n", err)
+			continue
+		}
+
+		// Only include schedules that match our pattern
+		if !strings.HasPrefix(entry.ID, "collect-games-") {
+			continue
+		}
+
+		// Get schedule handle to retrieve details
+		handle := scheduleClient.GetHandle(context.Background(), entry.ID)
+		desc, err := handle.Describe(context.Background())
+		if err != nil {
+			fmt.Printf("Failed to describe schedule %s: %v\n", entry.ID, err)
+			continue
+		}
+
+		// Extract tracking request from schedule action
+		var trackingReq sports.TrackingRequest
+		if workflowAction, ok := desc.Schedule.Action.(*client.ScheduleWorkflowAction); ok {
+			if len(workflowAction.Args) > 0 {
+				// The arg is a Temporal payload with base64 encoded data
+				// We need to decode it properly
+				jsonBytes, err := json.Marshal(workflowAction.Args[0])
+				if err != nil {
+					fmt.Printf("Failed to marshal schedule args for %s: %v\n", entry.ID, err)
+				} else {
+					// Parse the payload structure
+					var payload struct {
+						Metadata struct {
+							Encoding string `json:"encoding"`
+						} `json:"metadata"`
+						Data string `json:"data"`
+					}
+					
+					err = json.Unmarshal(jsonBytes, &payload)
+					if err != nil {
+						fmt.Printf("Failed to unmarshal payload for %s: %v\n", entry.ID, err)
+					} else {
+						// Decode the base64 data
+						decodedData, err := base64.StdEncoding.DecodeString(payload.Data)
+						if err != nil {
+							fmt.Printf("Failed to decode base64 data for %s: %v\n", entry.ID, err)
+						} else {
+							// Now unmarshal the actual tracking request
+							err = json.Unmarshal(decodedData, &trackingReq)
+							if err != nil {
+								fmt.Printf("Failed to unmarshal tracking request for %s: %v\n", entry.ID, err)
+							}
+						}
+					}
+				}
+			}
+		}
+
+		scheduleInfo := ScheduleInfo{
+			ScheduleID:   entry.ID,
+			Sport:        trackingReq.Sport,
+			League:       trackingReq.League,
+			Teams:        trackingReq.Teams,
+			Conferences:  trackingReq.Conferences,
+			ScheduleType: trackingReq.ScheduleType,
+			Paused:       desc.Schedule.State.Paused,
+		}
+
+		// Get next run time
+		if len(desc.Info.NextActionTimes) > 0 {
+			scheduleInfo.NextRunTime = desc.Info.NextActionTimes[0]
+		}
+
+		schedules = append(schedules, scheduleInfo)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(schedules)
+}
+
+// ManageSchedule handles schedule management (delete, pause, etc.)
+func (h *Handlers) ManageSchedule(w http.ResponseWriter, r *http.Request) {
+	scheduleID := strings.TrimPrefix(r.URL.Path, "/api/schedules/")
+	if scheduleID == "" {
+		http.Error(w, "Schedule ID required", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodDelete:
+		// Check if Temporal client is available
+		if h.temporalClient == nil {
+			response := map[string]string{
+				"message": "Demo mode: Schedule delete request received (Temporal server not connected)",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// Delete schedule
+		scheduleClient := h.temporalClient.ScheduleClient()
+		handle := scheduleClient.GetHandle(context.Background(), scheduleID)
+		err := handle.Delete(context.Background())
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to delete schedule: %v", err), http.StatusInternalServerError)
+			return
+		}
+		
+		response := map[string]string{
+			"message": "Schedule deleted successfully",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)

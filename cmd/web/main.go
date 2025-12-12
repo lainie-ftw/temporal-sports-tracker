@@ -46,6 +46,8 @@ func main() {
 	http.HandleFunc("/api/track", handlers.StartTracking)
 	http.HandleFunc("/api/workflows", handlers.GetWorkflows)
 	http.HandleFunc("/api/workflows/", handlers.ManageWorkflow)
+	http.HandleFunc("/api/schedules", handlers.GetSchedules)
+	http.HandleFunc("/api/schedules/", handlers.ManageSchedule)
 
 	port := os.Getenv("PORT")
 	if port == "" {

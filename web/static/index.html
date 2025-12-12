@@ -62,10 +62,35 @@
                         <small>Hold Ctrl/Cmd to select multiple conferences</small>
                     </div>
 
+                    <div class="form-group">
+                        <label for="schedule-type">Run Frequency:</label>
+                        <select id="schedule-type" required>
+                            <option value="once">One Time</option>
+                            <option value="daily">Daily (1AM Eastern)</option>
+                            <option value="weekly">Weekly (Mondays at 1AM Eastern)</option>
+                        </select>
+                        <small>Choose how often to collect games</small>
+                    </div>
+
                     <button type="submit" id="start-tracking-btn" disabled>
                         Start Tracking
                     </button>
                 </form>
+            </section>
+
+            <!-- Active Schedules Section -->
+            <section id="schedules-section" class="card">
+                <h2>Active Schedules</h2>
+                <div class="schedules-header">
+                    <button id="refresh-schedules-btn">🔄 Refresh</button>
+                    <span id="schedules-count">0 active schedules</span>
+                </div>
+                <div id="schedules-list">
+                    <div class="no-schedules">
+                        <p>No active schedules found.</p>
+                        <p>Create a daily or weekly schedule to see it here!</p>
+                    </div>
+                </div>
             </section>
 
             <!-- Running Workflows Section -->
