@@ -54,21 +54,26 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 
 	logger.Info("Game monitoring started", "gameID", game.ID)
 
-	// Grab notification types and channels requested
-	notificationTypesStr := os.Getenv("NOTIFICATION_TYPES")
-	var notificationTypes []string
-	if notificationTypesStr == "" {
-		notificationTypes = []string{"score_change"} // if not set, default to notifying if the score changes
-	} else {
-		notificationTypes = strings.Split(notificationTypesStr, ",")
+	// Grab notification types and channels from the game object (set by CollectGamesWorkflow)
+	// Fall back to environment variables for backwards compatibility
+	notificationTypes := game.NotificationTypes
+	if len(notificationTypes) == 0 {
+		notificationTypesStr := os.Getenv("NOTIFICATION_TYPES")
+		if notificationTypesStr == "" {
+			notificationTypes = []string{"score_change"} // if not set, default to notifying if the score changes
+		} else {
+			notificationTypes = strings.Split(notificationTypesStr, ",")
+		}
 	}
 
-	notificationChannelsStr := os.Getenv("NOTIFICATION_CHANNELS")
-	var notificationChannels []string
-	if notificationChannelsStr == "" {
-		notificationChannels = []string{"logger"} // if not set, default to just logging the message
-	} else {
-		notificationChannels = strings.Split(notificationChannelsStr, ",")
+	notificationChannels := game.NotificationChannels
+	if len(notificationChannels) == 0 {
+		notificationChannelsStr := os.Getenv("NOTIFICATION_CHANNELS")
+		if notificationChannelsStr == "" {
+			notificationChannels = []string{"logger"} // if not set, default to just logging the message
+		} else {
+			notificationChannels = strings.Split(notificationChannelsStr, ",")
+		}
 	}
 
 	// Initialize score tracking
@@ -80,10 +85,18 @@ func GameWorkflow(ctx workflow.Context, game Game) (string, error) {
 	// Initialize overtime tracking to the number of regulation periods in the game
 	lastOvertimePeriod := game.NumberOfPeriods
 
+	// For eSports CS2, use a longer polling interval or skip entirely
+	// TODO: When LLM-based match monitoring is implemented, this can be replaced
+	pollInterval := 5 * time.Minute
+	if game.Sport == "esports" && game.League == "cs2" {
+		logger.Info("CS2 game detected - using longer poll interval (placeholder)")
+		pollInterval = 30 * time.Minute // Poll less frequently for CS2 placeholder
+	}
+
 	// Monitor the game for 5 hours after start time - could be modified to check for the game status instead
 	for workflow.Now(ctx).Before(game.StartTime.Add(5 * time.Hour)) {
-		// Wait 5 minutes before next poll
-		timer := workflow.NewTimer(ctx, 5*time.Minute)
+		// Wait before next poll
+		timer := workflow.NewTimer(ctx, pollInterval)
 		selector := workflow.NewSelector(ctx)
 		selector.AddFuture(timer, func(f workflow.Future) {
 			// Timer fired, time to poll again

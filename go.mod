@@ -4,12 +4,13 @@ go 1.25.0
 
 require go.temporal.io/sdk v1.26.0
 
-require github.com/joho/godotenv v1.5.1
-
 require (
-	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/slack-go/slack v0.17.3 // indirect
+	github.com/joho/godotenv v1.5.1
+	github.com/sashabaranov/go-openai v1.41.2
+	github.com/slack-go/slack v0.17.3
 )
+
+require github.com/gorilla/websocket v1.5.3 // indirect
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -27,9 +28,9 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.temporal.io/api v1.29.1
 	golang.org/x/exp v0.0.0-20231127185646-65229373498e // indirect
-	golang.org/x/net v0.22.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240304212257-790db918fca8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240304212257-790db918fca8 // indirect
